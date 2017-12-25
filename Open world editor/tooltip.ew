@@ -1,0 +1,319 @@
+constant tooltip_control = createEx( Window, "", 0, 0, 0, 0, 0, 0, 0 )
+constant tooltip_screen = createEx( Pixmap, "", 0, 0, 0, 0, 0, 0, 0 )
+
+sequence tooltip_info
+tooltip_info={}
+integer tooltip_number
+tooltip_number=0
+
+integer tooltip_shown
+integer tooltip_timer
+integer tooltip_timer_hack
+integer tooltip_mousex,tooltip_mousey,tooltip_id,tooltip_timer_kill
+integer tooltipx, tooltipy
+tooltip_shown=0
+tooltip_timer=1010
+tooltip_timer_kill=1012
+tooltip_timer_hack=1014
+tooltip_mousex=-1
+tooltip_mousey=-1
+tooltipx=-1
+tooltipy=-1
+tooltip_id=0
+
+
+
+
+procedure tooltip_onTimer(integer self, integer event, sequence params)
+sequence mousepos,text
+integer x,y,width,height
+integer mousex,mousey
+
+  if params[1]=tooltip_timer then
+
+    for i=1 to length(tooltip_info) do
+      if tooltip_info[i][12]=tooltip_id then
+        if tooltip_info[i][7]=0 then
+          return
+        end if
+        if getActiveWindow()=0 then
+          return
+        end if
+
+        mousepos=getPointerRelPos(tooltip_info[i][1])
+    	text=tooltip_info[i][6]
+        if mousepos[1]=tooltip_mousex and mousepos[2]=tooltip_mousey then
+
+          tooltip_shown=1
+          mousepos=getPointerPos()-- get the mouse position from the screen
+          tooltipx=mousepos[1]
+          tooltipy=mousepos[2]
+          tooltipy+=15
+          -- set pixmap size
+          setCtlSize(tooltip_screen,getTextWidth(Screen,text)+10, 20)
+          -- copy from screen
+	  bitBlt( tooltip_screen, 0, 0, Screen, tooltipx, tooltipy, getTextWidth(Screen,text)+10, 20, SRCCOPY )
+          -- draw the box
+	  setPenColor( Screen, getSysColor( COLOR_INFOBK ) )
+	  drawRectangle( Screen, 1, tooltipx, tooltipy, tooltipx+getTextWidth(Screen,text)+10, tooltipy+20 )
+	  setPenColor( Screen, 0 )
+	  drawRectangle( Screen, 0, tooltipx, tooltipy, tooltipx+getTextWidth(Screen,text)+10, tooltipy+20 )
+	  setPenColor( Screen, getSysColor( COLOR_INFOTEXT ) )
+	  setPosition( Screen, tooltipx+4, tooltipy+3 )
+	  wPuts( Screen, text )
+          setTimer(self,tooltip_timer_kill,300)
+        end if
+
+  	exit
+
+      end if	
+    end for
+
+    killTimer(self,tooltip_timer)
+
+  elsif params[1]=tooltip_timer_hack then
+    for i=1 to length(tooltip_info) do
+      if tooltip_info[i][12]=tooltip_id then
+        if tooltip_info[i][7]=0 then
+          return
+        end if
+        if getActiveWindow()=0 then
+          return
+        end if
+
+        mousepos=getPointerRelPos(tooltip_info[i][1])
+    	text=tooltip_info[i][6]
+
+          tooltip_shown=1
+          mousepos=getPointerPos()-- get the mouse position from the screen
+          tooltipx=mousepos[1]
+          tooltipy=mousepos[2]
+          tooltipy+=15
+          -- set pixmap size
+          setCtlSize(tooltip_screen,getTextWidth(Screen,text)+10, 20)
+          -- copy from screen
+	  bitBlt( tooltip_screen, 0, 0, Screen, tooltipx, tooltipy, getTextWidth(Screen,text)+10, 20, SRCCOPY )
+          -- draw the box
+	  setPenColor( Screen, getSysColor( COLOR_INFOBK ) )
+	  drawRectangle( Screen, 1, tooltipx, tooltipy, tooltipx+getTextWidth(Screen,text)+10, tooltipy+20 )
+	  setPenColor( Screen, 0 )
+	  drawRectangle( Screen, 0, tooltipx, tooltipy, tooltipx+getTextWidth(Screen,text)+10, tooltipy+20 )
+	  setPenColor( Screen, getSysColor( COLOR_INFOTEXT ) )
+	  setPosition( Screen, tooltipx+4, tooltipy+3 )
+	  wPuts( Screen, text )
+          setTimer(tooltip_control,tooltip_timer_kill,300)
+
+
+  	exit
+
+      end if	
+    end for
+
+    killTimer(tooltip_control,tooltip_timer_hack)
+
+  elsif params[1]=tooltip_timer_kill then
+     if tooltip_shown=0 then
+       killTimer(self,tooltip_timer_kill)
+       return
+     end if
+     for i=1 to length(tooltip_info) do
+      if tooltip_info[i][12]=tooltip_id then
+        x=tooltip_info[i][2]
+        y=tooltip_info[i][3]
+    	width=tooltip_info[i][4]
+    	height=tooltip_info[i][5]
+    	mousepos=getPointerRelPos(tooltip_info[i][1])
+ 
+    	if mousepos[1]<x or mousepos[1]>x+width or mousepos[2]<y or mousepos[2]>y+height then
+          
+          killTimer(self,tooltip_timer_kill)
+          copyBlt(Screen,tooltipx,tooltipy,tooltip_screen)
+          tooltip_shown=0
+          if tooltip_info[i][13] then
+            call_proc(tooltip_info[i][13],{tooltip_id})
+          end if
+        end if
+
+        exit
+      end if
+    end for
+
+  end if
+
+end procedure
+setHandler( tooltip_control, w32HTimer, routine_id("tooltip_onTimer"))
+
+procedure tooltip_onEvent (integer self, integer event, sequence params)
+  integer iMsg
+  integer mousex,mousey
+  integer x,y,width,height
+
+  iMsg=params[1]
+  mousex = shortInt( lo_word( params[3] ) )
+  mousey = shortInt( hi_word( params[3] ) )
+
+  if iMsg = WM_MOUSEMOVE
+	or iMsg = WM_LBUTTONDOWN
+	or iMsg = WM_RBUTTONDOWN
+	or iMsg = WM_LBUTTONUP
+	or iMsg = WM_RBUTTONUP
+	or iMsg = WM_LBUTTONDBLCLK
+	or iMsg = WM_RBUTTONDBLCLK
+	then
+	
+    if tooltip_shown=1 then --i have draw to the screen
+      --need to remove from screen if mouse pos is not in side the tooltip
+      for i=1 to length(tooltip_info) do
+    	if tooltip_info[i][12]=tooltip_id then
+    	  x=tooltip_info[i][2]
+    	  y=tooltip_info[i][3]
+    	  width=tooltip_info[i][4]
+    	  height=tooltip_info[i][5]
+    	  if  iMsg = WM_MOUSEMOVE then
+    	  	
+    	    if mousex<x or mousex>x+width or mousey<y or mousey>y+height then
+	      copyBlt(Screen,tooltipx,tooltipy,tooltip_screen)
+	      tooltip_shown=0
+
+          for j=1 to length(tooltip_info) do
+            if tooltip_info[i][1]=tooltip_info[j][1] then
+              x=tooltip_info[j][2]
+              y=tooltip_info[j][3]
+    	      width=tooltip_info[j][4]
+    	      height=tooltip_info[j][5]
+              if mousex>=x and mousex<=x+width and mousey>=y and mousey<y+height then --mouse is over tooltip
+    	        -- set time and mouse positions and tooltip id
+    	        if tooltip_info[j][7]=1 then
+    	          tooltip_mousex=mousex
+    	          tooltip_mousey=mousey
+    	          tooltip_id=tooltip_info[j][12]
+    	          setTimer(tooltip_control,tooltip_timer_hack,100)
+    	        end if
+    	        exit
+    	      end if	
+            end if
+          end for
+
+            end if
+
+          else
+            copyBlt(Screen,tooltipx,tooltipy,tooltip_screen)
+            tooltip_shown=0
+          end if
+           
+
+          exit
+        end if
+      end for
+    else -- i have not draw to screen
+      for i=1 to length(tooltip_info) do
+    	if tooltip_info[i][1]=self then
+    	  x=tooltip_info[i][2]
+    	  y=tooltip_info[i][3]
+    	  width=tooltip_info[i][4]
+    	  height=tooltip_info[i][5]
+    	  if mousex>=x and mousex<=x+width and mousey>=y and mousey<y+height then --mouse is over tooltip
+    	    -- set time and mouse positions and tooltip id
+    	    if tooltip_info[i][7]=1 then
+    	      tooltip_mousex=mousex
+    	      tooltip_mousey=mousey
+    	      tooltip_id=tooltip_info[i][12]
+    	      setTimer(tooltip_control,tooltip_timer,1000)	
+    	    end if
+    	
+    	  exit
+    	  end if	
+    	end if
+      end for
+    end if
+
+  elsif iMsg = WM_KILLFOCUS then
+    if tooltip_shown=1 then --i have draw to the screen
+      for i=1 to length(tooltip_info) do
+    	if tooltip_info[i][12]=tooltip_id then
+    	  x=tooltip_info[i][2]
+    	  y=tooltip_info[i][3]
+    	  width=tooltip_info[i][4]
+    	  height=tooltip_info[i][5]
+    	  if mousex<x or mousex>x+width or mousey<y or mousey>y+height then
+	    copyBlt(Screen,tooltipx,tooltipy,tooltip_screen)
+	    tooltip_shown=0
+          end if
+          exit
+        end if
+      end for
+    end if
+  end if
+end procedure
+
+global function create_tooltip(sequence info)
+  --1 parent id
+  --2 x
+  --3 y
+  --4 width
+  --5 height
+  --6 text
+  --7 enabled
+  --8
+  --9
+  --10
+  --11
+  --12 id
+  setHandler( info[1], w32HEvent, routine_id("tooltip_onEvent"))
+  tooltip_number+=1
+  tooltip_info=append(tooltip_info, {info[1],info[2],info[3],info[4],info[5],info[6],1,0,0,0,0,tooltip_number,info[7]} )
+  return tooltip_number
+end function
+
+function remove_sequence(sequence info,integer num)
+sequence temp
+temp={}
+  for i=1 to length(info) do
+     if i=num then
+     else
+       temp=append(temp,info[i])
+     end if
+  end for
+  return temp
+end function
+
+global procedure delete_tooltip(integer id)
+  for i=1 to length(tooltip_info) do
+    if tooltip_info[i][12]=id then
+      tooltip_info=remove_sequence(tooltip_info,i)
+      exit	
+    end if
+  end for	
+end procedure
+
+global procedure tooltip_set_text(integer id,sequence text)
+  for i=1 to length(tooltip_info) do
+    if tooltip_info[i][12]=id then
+      tooltip_info[i][6]=text
+      exit	
+    end if
+  end for	
+end procedure
+
+global procedure tooltip_set_enable(integer id, integer flag)
+integer parent_id,x,y,width,height
+  for i=1 to length(tooltip_info) do
+    if tooltip_info[i][12]=id then
+      tooltip_info[i][7]=flag
+      exit	
+    end if
+  end for	
+end procedure
+
+global procedure draw_tooltip()-- debug tooltip routine
+integer parent_id,x,y,width,height
+  for i=1 to length(tooltip_info) do
+    parent_id=tooltip_info[i][1]
+    x=tooltip_info[i][2]
+    y=tooltip_info[i][3]
+    width=tooltip_info[i][4]
+    height=tooltip_info[i][5]
+    setPenColor(parent_id,rgb(255,255,255))
+    drawRectangle(parent_id,1,x,y,x+width,y+height)
+  end for
+end procedure

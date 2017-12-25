@@ -1,0 +1,126 @@
+sequence class_list,class_freelist,object_freelist
+class_list={}
+class_freelist={}
+object_freelist={}
+
+constant object_x = 1
+constant object_y = 2
+constant object_id = 3
+constant object_type = 4
+constant object_stats = 5
+constant object_position_list=6
+
+
+global function object_new()
+  integer handle
+  if length(class_freelist)>0 then
+    handle= class_freelist[1]
+    class_freelist = class_freelist[2..length(class_freelist)]
+  else
+    class_list= append(class_list,{})
+	object_freelist= append(object_freelist,{})
+    handle=length(class_list)
+  end if
+
+  class_list[handle]={}
+  object_freelist[handle]={}
+
+  return handle
+end function
+
+global function object_enter(integer handle,atom x, atom y, integer object_id, integer object_type, sequence stats)
+integer index
+  if length(object_freelist[handle])>0 then
+    index=object_freelist[handle][1]
+    object_freelist[handle] = object_freelist[handle][2..length(object_freelist[handle])]
+    class_list[handle][index]={x,y,object_id,object_type,stats,{{x,y}}}
+    return index
+  else
+    class_list[handle]=append(class_list[handle],{x,y,object_id,object_type,stats,{{x,y}}})
+    return length(class_list[handle])
+  end if
+
+  
+end function
+
+global function object_get_list(integer handle)
+  return class_list[handle]
+end function
+
+global function object_get_free_size(integer handle)
+  return length(object_freelist[handle])
+end function
+
+
+global function object_get_freelist(integer handle)
+  return object_freelist[handle]
+end function
+
+
+
+global function object_get_x(integer handle,integer index)
+  return class_list[handle][index][object_x]
+end function
+
+global function object_get_y(integer handle,integer index)
+  return class_list[handle][index][object_y]
+end function
+
+global function object_get_type(integer handle,integer index)
+  return class_list[handle][index][object_type]
+end function
+
+global function object_get_id(integer handle,integer index)
+  return class_list[handle][index][object_id]
+end function
+
+global function object_get_stats(integer handle,integer index)
+  return class_list[handle][index][object_stats]
+end function
+
+global function object_get_position_list(integer handle,integer index)
+  return class_list[handle][index][object_position_list]
+end function
+
+global procedure object_set_position_list(integer handle,integer index,sequence list)
+ class_list[handle][index][object_position_list]=list
+end procedure
+
+global procedure object_set_position(integer handle,integer index, atom x, atom y)
+  atom ox,oy
+  ox=class_list[handle][index][object_position_list][length(class_list[handle][index][object_position_list])][1]
+  oy=class_list[handle][index][object_position_list][length(class_list[handle][index][object_position_list])][2]
+  if ox!=x or oy!=y then
+    class_list[handle][index][object_position_list]=append(class_list[handle][index][object_position_list],{x,y})
+  end if
+  class_list[handle][index][object_x]=x
+  class_list[handle][index][object_y]=y
+
+  --?length(class_list[handle][index][object_position_list])
+end procedure
+
+global procedure object_set_stats(integer handle,integer index, atom x, atom y, sequence stats)
+  atom ox,oy
+  ox=class_list[handle][index][object_position_list][length(class_list[handle][index][object_position_list])][1]
+  oy=class_list[handle][index][object_position_list][length(class_list[handle][index][object_position_list])][2]
+  if ox!=x or oy!=y then
+    class_list[handle][index][object_position_list]=append(class_list[handle][index][object_position_list],{x,y})
+  end if
+  class_list[handle][index][object_x]=x
+  class_list[handle][index][object_y]=y
+  class_list[handle][index][object_stats]=stats
+
+  --?length(class_list[handle][index][object_position_list])
+end procedure
+
+global procedure object_free(integer handle, integer index)
+  class_list[handle][index]={}
+  object_freelist[handle]&=index
+end procedure
+
+
+global procedure object_delete(integer handle)
+  class_list[handle]={}
+  object_freelist[handle]={}
+  class_freelist =append(class_freelist, handle)
+end procedure

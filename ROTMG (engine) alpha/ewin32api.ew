@@ -1,0 +1,686 @@
+-- ewin32api.ew for use with the
+-- EXOTICA dll
+-- (c)1999 Todd Riggins
+--
+-- This file sets up needed win32 functions and variables for use with the
+-- EXOTICA dll.
+
+-- 0003: Added functions + constants for OpenGL programming
+-- /Mic
+
+ --constant
+ --   VK_LEFT           = #25
+ --  , VK_UP             = #26
+ --  , VK_RIGHT          = #27
+ --  , VK_DOWN           = #28
+
+
+include machine.e
+include dll.e
+include get.e
+include msgbox.e
+
+-- funcres holds returned function values
+atom funcval
+
+constant lpcstr = allocate(256)		-- make room for 255 CHARs + NULL terminator
+
+function or_all(sequence s)
+    -- or together all elements of a sequence
+    atom result
+    
+    result = 0
+    for i = 1 to length(s) do
+	  result = or_bits(result, s[i])
+    end for
+    return result
+end function
+
+global function LOWORD(object o)	--return the low word of an atom/integer as an integer
+integer i
+ i=and_bits(o,#FFFF)
+ return i
+end function
+
+global function HIWORD(object o)	--return the high word of an atom/integer as an integer
+integer i
+ i=and_bits(floor(o/#10000),#FFFF)
+ return i
+end function
+
+-- Structure of WNDCLASS
+global constant cbSize    = 0,
+         style            = 4,
+         lpfnWndProc      = 8,
+         cbClsExtra       = 12,
+         cbWndExtra       = 16,
+         hInstance        = 20,
+         hIcon            = 24,
+         hCursor          = 28,
+         hbrBackground    = 32,
+         lpszMenuName     = 36,
+         lpszClassName    = 40,
+         hIconSm          = 44,
+         SIZE_OF_WNDCLASS = 48
+
+-- STRUCT PIXELFORMATDESCRIPTOR
+global constant nSize				= 0,
+                nVersion			= 2,
+                dwFlags				= 4,
+                iPixelType			= 8,
+                cColorBits			= 9,
+                cRedBits			= 10,
+                cRedShift			= 11,
+                cGreenBits			= 12,
+                cGreenShift			= 13,
+                cBlueBits			= 14,
+                cBlueShift			= 15,
+                cAlphaBits			= 16,
+                cAlphaShift			= 17,
+                cAccumBits			= 18,
+                cAccumRedBits			= 19,
+                cAccumGreenBits			= 20,
+                cAccumBlueBits			= 21,
+                cAccumAlphaBits			= 22,
+                cDepthBits			= 23,
+                cStencilBits			= 24,
+                cAuxBuffers			= 25,
+                iLayerType			= 26,
+                bReserved			= 27,
+                dwLayerMask			= 28,
+                dwVisibleMask			= 32,
+                dwDamageMask			= 36,
+                SIZE_OF_PIXELFORMATDESCRIPTOR 	= 40
+--END STRUCT
+
+-- STRUCT DEVMODE
+global constant	dmDeviceName	= 0,
+		dmSpecVersion	= 32,
+		dmDriverVersion	= 34,
+		dmSize		= 36,
+		dmDriverExtra	= 38,
+		dmFields	= 40,
+		dmOrientation	= 44,
+		dmPaperSize	= 46,
+		dmPaperLength	= 48,
+		dmPaperWidth	= 50,
+		dmPosition	= 44,
+		dmScale		= 52,
+		dmCopies	= 54,
+		dmDefaultSource	= 56,
+		dmPrintQuality	= 58,
+		dmColor		= 60,
+		dmDuplex	= 62,
+		dmYResolution	= 64,
+		dmTTOption	= 66,
+		dmCollate	= 68,
+		dmFormName	= 70,
+		dmLogPixels	= 102,
+		dmBitsPerPel 	= 104,
+		dmPelsWidth 	= 108,
+		dmPelsHeight 	= 112,
+		dmDisplayFlags 	= 116,
+		dmDisplayFrequency = 120,
+		--#if(WINVER >= 0x0400)
+		dmICMMethod 	= 124,
+		dmICMIntent 	= 128,
+		dmMediaType 	= 132,
+		dmDitherType 	= 136,
+		dmReserved1 	= 140,
+		dmReserved2 	= 144,
+		--#if (WINVER >= 0x0500)
+		dmPanningWidth 	= 148,
+		dmPanningHeight = 152,
+		SIZE_OF_DEVMODE = 156
+--END STRUCT
+
+
+global constant	ofn_lStructSize=0,
+	        ofn_hwndOwner=4,
+	        ofn_hInstance=8,
+	        ofn_lpstrFilter=12,
+	        ofn_lpstrCustomFilter=16,
+	        ofn_nMaxCustFilter=20,
+	        ofn_nFilterIndex=24,
+	        ofn_lpstrFile=28,
+	        ofn_nMaxFile=32,
+	        ofn_lpstrFileTitle=36,
+	        ofn_nMaxFileTitle=40,
+	        ofn_lpstrInitialDir=44,
+	        ofn_lpstrTitle=48,
+	        ofn_Flags=52,
+	        ofn_nFileOffset=56,
+	        ofn_nFileExtension=58,
+	        ofn_lpstrDefExt=60,
+	        ofn_lCustData=64,
+	        ofn_lpfnHook=68,
+	        ofn_lpTemplateName=72,
+                SIZE_OF_OPENFILENAME = 76
+
+
+
+--STRUCT PAINTSTRUCT
+global constant  ps_hdc			= 0,
+                 ps_fErase		= 4,
+                 ps_rcPaint		= 8,	-- (RECT = { LONG left,top,right,bottom })
+                 ps_fRestore		= 24,
+                 ps_fIncUpdate		= 28,
+                 ps_rgbReserved		= 32,	-- (32 bytes)
+                 SIZE_OF_PAINTSTRUCT	= 64
+--END STRUCT
+ 
+
+global constant SIZE_OF_MESSAGE = 40,
+                SIZE_OF_RECT	= 16
+                 
+
+
+-- Class styles
+global constant CS_HREDRAW = 2,
+                CS_VREDRAW = 1,
+		CS_OWNDC = 32,
+
+		IDC_ARROW	= 32512,
+		IDC_IBEAM	= 32513,
+		IDC_WAIT	= 32514,
+		IDC_CROSS	= 32515,
+		IDC_UPARROW	= 32516,
+		IDC_SIZENWSE	= 32642,
+		IDC_SIZENESW	= 32643,
+		IDC_SIZEWE	= 32644,
+		IDC_SIZENS	= 32645,
+		IDC_SIZEALL	= 32646,
+		IDC_NO		= 32648,
+		IDC_APPSTARTING	= 32650,
+		IDC_HELP	= 32651,
+		IDI_APPLICATION	= 32512,
+		IDI_HAND	= 32513,
+		IDI_QUESTION	= 32514,
+		IDI_EXCLAMATION	= 32515,
+		IDI_ASTERISK	= 32516,
+		IDI_WINLOGO	= 32517
+
+
+
+
+global constant PFD_DOUBLEBUFFER 	= 1,
+                PFD_STEREO 		= 2,
+                PFD_DRAW_TO_WINDOW 	= 4,
+                PFD_DRAW_TO_BITMAP 	= 8,
+                PFD_SUPPORT_GDI 	= #10,
+                PFD_SUPPORT_OPENGL 	= #20,
+                PFD_GENERIC_FORMAT 	= #40,
+                PFD_NEED_PALETTE 	= #80,
+                PFD_NEED_SYSTEM_PALETTE = #100,
+                PFD_SWAP_EXCHANGE 	= #200,
+                PFD_SWAP_COPY 		= #400,
+                PFD_SWAP_LAYER_BUFFERS 	= #800,
+                PFD_GENERIC_ACCELERATED	= #1000,
+                PFD_TYPE_RGBA 		= 0,
+                PFD_TYPE_COLORINDEX 	= 1,
+                PFD_MAIN_PLANE 		= 0,
+                PFD_OVERLAY_PLANE 	= 1,
+                PFD_UNDERLAY_PLANE 	= (-1)
+
+
+global constant DM_BITSPERPEL		= #40000,
+		DM_PELSWIDTH		= #80000,
+		DM_PELSHEIGHT		= #100000,
+		DM_DISPLAYFLAGS		= #200000,
+		DM_DISPLAYFREQUENCY 	= #400000,
+		CDS_UPDATEREGISTRY	= 1,
+		CDS_TEST		= 2,
+		CDS_GLOBAL		= 8,
+		CDS_FULLSCREEN		= 4,
+		CDS_SETPRIMARY		= 16,
+		CDS_VIDEOPARAMETERS 	= 32,
+		CDS_RESET		= #40000000,
+		CDS_NORESET		= #10000000,
+		DISP_CHANGE_SUCCESSFUL	= 0,
+		DISP_CHANGE_RESTART	= 1
+
+
+
+-- ShowWindow() Commands
+global constant SW_SHOW = 5
+
+-- GetSystemMetrics() codes
+global constant SM_CXSCREEN = 0,
+                SM_CYSCREEN = 1
+
+-- PeekMessage() Options
+global constant PM_NOREMOVE = #0000
+
+-- Stock Logical Objects
+global constant NULL_BRUSH = 5,
+                BLACK_BRUSH = 4 
+
+
+-- Window Messages
+global constant WM_DESTROY     	= #0002,
+                WM_ACTIVATEAPP 	= #001C,
+                WM_SETCURSOR   	= #0020,
+                WM_KEYDOWN     	= #0100,
+                WM_PAINT       	= #000F,
+                WM_SIZE	       	= #0005,
+                WM_CLOSE       	= #0010,
+                WM_CREATE      	= #0001,
+                WM_SHOWWINDOW  	= #0018,
+                WM_COMMAND     	= 273,
+                WM_TIMER	= 275,
+
+                WM_MOUSEMOVE 	= 512,
+                WM_LBUTTONDOWN 	= 513,
+                WM_LBUTTONUP 	= 514,
+                WM_RBUTTONDOWN 	= 516,
+                WM_RBUTTONUP 	= 517
+
+
+global constant HWND_TOP=0,
+                HWND_TOPMOST=-1
+
+
+global constant OFN_EXPLORER=#80000,
+                OFN_FILEMUSTEXIST=#1000  
+
+               
+global constant  MF_BITMAP=4,
+ MF_CHECKED=8,
+ MF_DISABLED=2,
+ MF_ENABLED=0,
+ MF_GRAYED=1,
+ MF_MENUBARBREAK=32,
+ MF_MENUBREAK=64,
+ MF_OWNERDRAW=256,
+ MF_POPUP=16,
+ MF_SEPARATOR=#800,
+ MF_STRING=0,
+ MF_UNCHECKED=0,
+ MF_DEFAULT=4096,
+ MF_SYSMENU=#2000,
+ MF_HELP=#4000,
+ MF_END=128,
+ MF_RIGHTJUSTIFY=#4000,
+ MF_MOUSESELECT=#8000
+  	 	
+
+-- Virtual Keys, Standard Set
+--constant VK_ESCAPE = #1B
+
+-- PALETTEENTRY flags 
+
+global constant PC_RESERVED     = #01    -- palette index used for animation 
+global constant PC_NOCOLLAPSE   = #04    -- do not match color to system palette 
+
+-- EXOTICA needs both PC_RESERVED and PC_NOCOLLAPSE, so I or_all them
+-- into a specially needed flag for easy use
+global constant PE_FLAGS = or_all({PC_RESERVED, PC_NOCOLLAPSE})
+
+
+-- Window Styles
+global constant WS_OVERLAPPED  = #00000000,
+                WS_POPUP       = #80000000,
+                WS_CAPTION     = #00C00000,   
+	            WS_SYSMENU     = #00080000,
+	            WS_THICKFRAME  = #00040000,
+	            WS_MINIMIZEBOX = #00020000,
+	            WS_MAXIMIZEBOX = #00010000, 
+	            WS_OVERLAPPEDWINDOW = or_all({WS_OVERLAPPED, WS_CAPTION, WS_SYSMENU
+				                   }), --,WS_MINIMIZEBOX WS_MAXIMIZEBOX}),WS_THICKFRAME
+		WS_CHILDWINDOW	= #40000000,
+		WS_CLIPCHILDREN	= #2000000,
+		WS_CLIPSIBLINGS	= #4000000,
+                WS_GLWINDOW = or_all({				-- home-made window style
+                                      WS_OVERLAPPEDWINDOW,
+                                      WS_CLIPSIBLINGS,
+                                      WS_CLIPCHILDREN
+                                     })
+                                     
+
+-- Extended Window Styles
+global constant WS_EX_TOPMOST = #00000008,
+                WS_EX_OVERLAPPEDWINDOW = #300
+
+-- CreateFont Weight values
+global constant 
+	FW_DONTCARE	=		0,
+	FW_THIN =			100,
+	FW_EXTRALIGHT =		200,
+	FW_LIGHT =			300,
+	FW_NORMAL =			400,
+	FW_MEDIUM =			500,
+	FW_SEMIBOLD =		600,
+	FW_BOLD =			700,
+	FW_EXTRABOLD =		800,
+	FW_HEAVY =			900
+
+-- CreateFont Character Set 
+global constant
+ ANSI_CHARSET          =  0,
+ DEFAULT_CHARSET       =  1,
+ SYMBOL_CHARSET        =  2,
+ SHIFTJIS_CHARSET      =  128,
+ HANGEUL_CHARSET       =  129,
+ HANGUL_CHARSET        =  129,
+ GB2312_CHARSET        =  134,
+ CHINESEBIG5_CHARSET   =  136,
+ OEM_CHARSET           =  255,
+
+ JOHAB_CHARSET         =  130,
+ HEBREW_CHARSET        =  177,
+ ARABIC_CHARSET        =  178,
+ GREEK_CHARSET         =  161,
+ TURKISH_CHARSET       =  162,
+ VIETNAMESE_CHARSET    =  163,
+ THAI_CHARSET          =  222,
+ EASTEUROPE_CHARSET    =  238,
+ RUSSIAN_CHARSET       =  204,
+ MAC_CHARSET           =  77,
+ BALTIC_CHARSET        =  186
+
+-- CreateFont Output Precision
+global constant
+ OUT_DEFAULT_PRECIS        =  0,
+ OUT_STRING_PRECIS         =  1,
+ OUT_CHARACTER_PRECIS      =  2,
+ OUT_STROKE_PRECIS         =  3,
+ OUT_TT_PRECIS             =  4,
+ OUT_DEVICE_PRECIS         =  5,
+ OUT_RASTER_PRECIS         =  6,
+ OUT_TT_ONLY_PRECIS        =  7,
+ OUT_OUTLINE_PRECIS        =  8,
+ OUT_SCREEN_OUTLINE_PRECIS =  9
+
+-- CreateFont Clip Precision
+global constant
+ CLIP_DEFAULT_PRECIS     = 0,
+ CLIP_CHARACTER_PRECIS   = 1,
+ CLIP_STROKE_PRECIS      = 2,
+ CLIP_MASK               = #F,
+ CLIP_LH_ANGLES          = 16,
+ CLIP_TT_ALWAYS          = 32,
+ CLIP_EMBEDDED           = 128
+
+-- CreateFont Quality
+global constant
+ DEFAULT_QUALITY       =  0,
+ DRAFT_QUALITY         =  1,
+ PROOF_QUALITY         =  2,
+ NONANTIALIASED_QUALITY=  3,
+ ANTIALIASED_QUALITY   =  4
+
+-- or_bits() with one of the following...
+global constant
+ DEFAULT_PITCH         =  0,
+ FIXED_PITCH           =  1,
+ VARIABLE_PITCH        =  2
+
+-- CreateFont Pitch and Family
+global constant
+ FF_DONTCARE         = 0,   -- (0<<4)  /* Don't care or don't know. */
+ FF_ROMAN            = 16,  -- (1<<4)  /* Variable stroke width, serifed. */
+                            --         /* Times Roman, Century Schoolbook, etc. */
+ FF_SWISS            = 32,  -- (2<<4)  /* Variable stroke width, sans-serifed. */
+                            --         /* Helvetica, Swiss, etc. */
+ FF_MODERN           = 240, -- (3<<4)  /* Constant stroke width, serifed or sans-serifed. */
+                            --         /* Pica, Elite, Courier, etc. */
+ FF_SCRIPT           = 64,  -- (4<<4)  /* Cursive, etc. */
+ FF_DECORATIVE       = 80   -- (5<<4)  /* Old English, etc. */
+
+global constant WGL_FONT_LINES	= 0,
+ 		WGL_FONT_POLYGONS = 1
+
+------------------------------------------------------
+--- Global Stuff Needed from Microsoft's Win32 API ---
+------------------------------------------------------   
+-- Setup integers
+global integer GetSystemMetrics, PeekMessage, SetCursor, LoadIcon,
+        LoadCursor, GetStockObject, RegisterClassEx,
+        CreateWindow, CreateWindowEx, ShowWindow, UpdateWindow,
+        TranslateMessage, DispatchMessage, PostQuitMessage,
+        GetMessage, PostMessage, DefWindowProc,ShowCursor,
+
+        GetDC,GetWindowDC,ReleaseDC, BeginPaint,EndPaint, GetClientRect,InvalidateRect,
+        ReleaseCapture,SetCapture, DestroyWindow,SetWindowPos,GetOpenFileName,
+        ChoosePixelFormat,DescribePixelFormat,SetPixelFormat,SwapBuffers,
+        CreateMenu,CreatePopupMenu,AppendMenu,SetMenu,
+        CheckMenuItem,GetMenuState,DestroyMenu,SetWindowText,
+        ChangeDisplaySettings,SetTimer,KillTimer, Sleep
+        
+
+
+-- user functions/procedures
+global integer timeGetTime
+
+-- kernel32 routines
+global integer GetTickCount
+
+-- gdi32 routines
+global integer CreateFont,SelectObject
+
+
+procedure not_found(sequence name)
+       funcval = message_box("Couldn't find " & name, "FAILED!!!", MB_ICONINFORMATION+MB_TASKMODAL ) 
+       abort(1)
+end procedure
+
+
+global function link_c_func(atom dll, sequence name, sequence args, atom result)
+-- dynamically link a C routine as a Euphoria function
+    integer handle
+
+    handle = define_c_func(dll, name, args, result)
+    if handle = -1 then
+	not_found(name)
+    else
+	return handle
+    end if
+end function
+
+
+global function link_c_proc(atom dll, sequence name, sequence args)
+-- dynamically link a C routine as a Euphoria function
+    integer handle
+
+    handle = define_c_proc(dll, name, args)
+    if handle = -1 then
+	not_found(name)
+    else
+	return handle
+    end if
+end function
+
+
+procedure link_win32_dll_routines()
+-- get handles to all dll routines that we need
+    atom user32, gdi32, winmm, kernel32,comdlg32
+
+    user32 = open_dll("user32.dll")
+    if user32 = NULL then
+	not_found("user32.dll")
+    end if
+    gdi32 = open_dll("gdi32.dll")
+    if gdi32 = NULL then
+	not_found("gdi32.dll")
+    end if
+    winmm = open_dll("winmm.dll")
+    if winmm = NULL then
+	not_found("winmm.dll")
+    end if
+    kernel32 = open_dll("kernel32.dll")
+    if kernel32 = NULL then
+	not_found("kernel32.dll")
+    end if
+    comdlg32 = open_dll("comdlg32.dll")
+    if comdlg32 = NULL then
+	not_found("comdlg32.dll")
+    end if
+
+-----------------------------------------------
+--- Stuff Needed from Microsoft's Win32 API ---
+-----------------------------------------------   
+    GetSystemMetrics = link_c_func(user32, "GetSystemMetrics", {C_INT}, C_INT)
+    PeekMessage = link_c_func(user32, "PeekMessageA", {C_POINTER,C_POINTER,C_UINT,C_UINT,C_UINT}, C_INT)
+    SetCursor = link_c_func(user32, "SetCursor", {C_POINTER}, C_POINTER)
+    timeGetTime = link_c_func(winmm,"timeGetTime",{}, C_ULONG)
+    LoadIcon = link_c_func(user32, "LoadIconA", {C_UINT, C_POINTER}, C_UINT)
+    LoadCursor = link_c_func(user32, "LoadCursorA", {C_POINTER, C_INT}, C_INT)
+    GetStockObject = link_c_func(gdi32, "GetStockObject", {C_INT}, C_INT)
+    RegisterClassEx = link_c_func(user32, "RegisterClassExA", {C_POINTER}, C_INT)
+    CreateWindowEx = link_c_func(user32, "CreateWindowExA", 
+     {C_INT, C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT},
+      C_INT)
+--    CreateWindow = link_c_func(user32, "CreateWindowA", 
+--     { C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT},
+--      C_INT)
+    CreateWindow=CreateWindowEx
+    ShowWindow = link_c_proc(user32, "ShowWindow", {C_INT, C_INT})
+    ShowCursor = link_c_func(user32, "ShowCursor", {C_INT},C_INT)
+    UpdateWindow = link_c_proc(user32, "UpdateWindow", {C_INT})
+    GetMessage = link_c_func(user32, "GetMessageA",{C_INT, C_INT, C_INT, C_INT}, C_INT)
+    TranslateMessage = link_c_proc(user32, "TranslateMessage", {C_INT})
+    DispatchMessage = link_c_proc(user32, "DispatchMessageA", {C_INT})
+    PostQuitMessage = link_c_proc(user32, "PostQuitMessage", {C_INT})
+    PostMessage = link_c_func(user32, "PostMessageA", {C_INT, C_UINT, C_INT, C_INT },C_INT)
+    DefWindowProc = link_c_func(user32, "DefWindowProcA",{C_INT, C_INT, C_INT, C_INT}, C_INT)
+    ChangeDisplaySettings = link_c_func(user32,"ChangeDisplaySettingsA",{C_POINTER,C_UINT},C_INT)
+	
+    CreateFont = link_c_func(gdi32,"CreateFontA",{ C_INT, C_INT, C_INT, C_INT, C_INT, C_ULONG,
+	 C_ULONG, C_ULONG, C_ULONG, C_ULONG, C_ULONG, C_ULONG, C_ULONG, C_POINTER}, C_ULONG)
+
+    GetTickCount = link_c_func(kernel32,"GetTickCount",{},C_ULONG)
+    Sleep = link_c_proc(kernel32,"Sleep",{C_ULONG})
+    
+
+-- 0003: Added functions for OpenGL programming
+
+    --USER32 functions
+    CreateMenu = link_c_func(user32,"CreateMenu",{ },C_INT)
+    CreatePopupMenu = link_c_func(user32,"CreatePopupMenu",{ },C_INT)
+    AppendMenu = link_c_func(user32,"AppendMenuA",{ C_INT,C_UINT,C_UINT,C_POINTER },C_INT)
+    SetMenu = link_c_func(user32,"SetMenu",{ C_INT,C_INT },C_INT)
+    CheckMenuItem = link_c_func(user32,"CheckMenuItem",{ C_INT,C_INT,C_INT },C_INT)
+    GetMenuState = link_c_func(user32,"GetMenuState",{ C_INT,C_INT,C_INT },C_INT)
+    DestroyMenu = link_c_func(user32,"DestroyMenu",{ C_INT },C_INT)
+    GetDC = link_c_func(user32, "GetDC", { C_INT },C_INT)
+    GetWindowDC = link_c_func(user32, "GetWindowDC", { C_INT },C_INT)
+    ReleaseDC = link_c_func(user32, "ReleaseDC", { C_INT,C_INT },C_INT)
+    BeginPaint = link_c_func(user32, "BeginPaint", { C_INT,C_POINTER },C_INT)
+    EndPaint = link_c_func(user32, "EndPaint", { C_INT,C_POINTER },C_INT)
+    GetClientRect = link_c_func(user32, "GetClientRect", { C_INT,C_POINTER },C_INT)
+    InvalidateRect = link_c_func(user32, "InvalidateRect", { C_INT,C_INT,C_INT },C_INT)
+    ReleaseCapture = link_c_func(user32, "ReleaseCapture", {  },C_INT)
+    SetCapture = link_c_func(user32, "SetCapture", { C_INT },C_INT)
+    SetWindowPos = link_c_func(user32, "SetWindowPos", repeat(C_INT,6) & C_UINT,C_INT)
+    SetWindowText = link_c_func(user32, "SetWindowTextA", { C_INT,C_POINTER },C_INT)
+    DestroyWindow = link_c_func(user32,"DestroyWindow",{ C_INT },C_INT)
+    SetTimer = link_c_func(user32,"SetTimer",{C_UINT,C_UINT,C_UINT,C_POINTER},C_UINT)
+    KillTimer = link_c_proc(user32,"KillTimer",{C_UINT,C_UINT})
+
+    --GDI32 functions
+    ChoosePixelFormat = link_c_func(gdi32,"ChoosePixelFormat", { C_INT,C_POINTER },C_INT)
+    DescribePixelFormat = link_c_func(gdi32,"DescribePixelFormat", { C_INT,C_INT,C_UINT,C_POINTER },C_INT)
+    SetPixelFormat = link_c_func(gdi32,"SetPixelFormat", { C_INT,C_INT,C_POINTER },C_INT)
+    SwapBuffers = link_c_func(gdi32,"SwapBuffers", { C_INT },C_INT)
+    SelectObject = link_c_func(gdi32,"SelectObject",{ C_UINT,C_UINT },C_UINT)	
+    GetOpenFileName = link_c_func(comdlg32,"GetOpenFileNameA", { C_POINTER },C_INT)
+
+end procedure
+
+link_win32_dll_routines()
+
+
+global procedure ewShowCursor(integer mode)
+  
+  if c_func(ShowCursor,{mode}) then end if
+end procedure
+
+
+global function ewBeginPaint(atom hwnd,atom ps)
+	return c_func(BeginPaint,{hwnd,ps})
+end function
+
+
+global procedure ewCheckMenuItem(atom hmenu,atom idm,atom mask)
+	if c_func(CheckMenuItem,{hmenu,idm,mask}) then end if
+end procedure
+
+
+global function ewCreateFont(integer a,integer b,integer c,integer d,integer e,integer f,
+			     integer g,integer h,integer i,integer j,integer k,integer l,
+			     integer m,sequence n)
+	poke(lpcstr,n&0)
+	return c_func(CreateFont,{a,b,c,d,e,f,g,h,i,j,k,l,m,lpcstr})
+end function
+
+
+global function ewCreateMenu()
+ 	return c_func(CreateMenu,{ })
+end function
+
+
+global function ewCreatePopupMenu()
+ 	return c_func(CreatePopupMenu,{ })
+end function
+
+
+global function ewDefWindowProc(atom hwnd,atom msg,atom wParam,atom lParam)
+	return c_func(DefWindowProc,{hwnd,msg,wParam,lParam})
+end function
+
+global procedure ewDestroyMenu(atom hmenu)
+	if c_func(DestroyMenu,{hmenu}) then end if
+end procedure
+
+
+global procedure ewEndPaint(atom hwnd,atom ps)
+	if c_func(EndPaint,{hwnd,ps}) then end if
+end procedure
+
+
+global function ewLoadIcon(atom inst,object icn)
+	if sequence(icn) then
+		poke(lpcstr, icn & 0)
+		return c_func(LoadIcon,{inst,lpcstr})
+	end if
+end function
+
+
+global procedure ewAppendMenu(integer a,atom b,atom c,object text)
+ 	if sequence(text) then
+  		poke(lpcstr,text & 0)
+  		if c_func(AppendMenu,{ a,b,c,lpcstr }) then end if
+ 	else
+  		if c_func(AppendMenu,{ a,b,c,NULL }) then end if
+ 	end if
+end procedure
+
+
+global function ewPostMessage(atom hwnd,atom msg,atom wParam,atom lParam)
+	return c_func(PostMessage,{hwnd,msg,wParam,lParam})
+end function
+
+
+global procedure ewPostQuitMessage(integer i)
+	c_proc(PostQuitMessage,{i})
+end procedure
+
+
+global function ewSelectObject(atom hdc,atom hgdiobj)
+	return c_func(SelectObject,{hdc,hgdiobj})
+end function
+
+global procedure ewSetWindowPos(atom hwnd,atom a,integer x,integer y,integer w,integer h,atom b)
+	if c_func(SetWindowPos,{hwnd,a,x,y,w,h,b}) then end if
+end procedure
+
+global procedure ewSetWindowText(atom hwnd,sequence text)
+ 	poke(lpcstr,text & 0)
+ 	if c_func(SetWindowText,{ hwnd,lpcstr }) then end if
+end procedure
+
+global function ewSwapBuffers(atom dc)
+	return c_func(SwapBuffers,{dc})
+end function
+
+

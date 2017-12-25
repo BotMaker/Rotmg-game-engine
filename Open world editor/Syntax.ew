@@ -1,0 +1,309 @@
+------------------------------------------------------------------------------------
+--  Syntax v1.0  <eunexus@yahoo.com>
+--
+--  This software is free and may be used in any program or project,
+--  compiled or not, for any purpose as long as I am given due credit.
+------------------------------------------------------------------------------------
+--  If there are any comments, questions, concerns, (bugs *gasp*) please email me.
+------------------------------------------------------------------------------------
+--
+--  I credit the original idea for this type of highlighting to Iczelion...
+--
+------------------------------------------------------------------------------------
+
+without warning
+
+atom Void
+sequence hWndtoID       hWndtoID = {}
+sequence oldWinHandle   oldWinHandle = {}
+sequence fontInfo       fontInfo = {}
+sequence synKeyWords    synKeyWords = {}
+sequence synKeyColors   synKeyColors = {}
+sequence synEnableColor synEnableColor = {}
+
+global constant
+Syn_Comment = 1,
+Syn_Quotes = 2,
+Syn_DefText = 3
+
+constant
+hlCreateRectRgn = registerw32Function( gdi32, "CreateRectRgn", {C_LONG,C_LONG,C_LONG,C_LONG}, C_LONG),
+hlZeroMemory = registerw32Procedure( kernel32, "RtlZeroMemory", {C_POINTER,C_LONG} )
+
+-- set up character class for easier line scanning ---------------------------------
+sequence nonalpha
+	nonalpha = repeat( 1, 255 )
+	nonalpha['a'..'z'] = 0
+	nonalpha['A'..'Z'] = 0
+	nonalpha['_'] = 0
+	nonalpha['0'..'9'] = 0
+	nonalpha['\''] = -1
+	nonalpha['"'] = -1
+	nonalpha['\\'] = -2
+	nonalpha[#D] = -3
+
+-- function: setREFont [helper procedure for Syntax_CallB] -------------------------
+procedure setREFont( atom cntlID, atom hDC, seq FontName, integer PointSize )
+	atom cyDpi, ptY, Pnt
+	atom Logfont
+	atom CharFormat
+
+	if fontInfo[cntlID][1] = 0 then
+	    Void = w32Func( xSetGraphicsMode, {hDC, GM_ADVANCED} ) 
+	    Void = w32Func( xModifyWorldTransform, {hDC, NULL, MWT_IDENTITY} )
+	    Void = w32Func( xSetViewportOrgEx, {hDC, 0, 0, NULL} )
+	    Void = w32Func( xSetWindowOrgEx, {hDC, 0, 0, NULL} )
+	    cyDpi = ( 25.4 * w32Func(xGetDeviceCaps,{hDC,10}) / w32Func(xGetDeviceCaps,{hDC, 6}) )
+	    ptY = PointSize * 12 * cyDpi / 72
+	    Pnt = allocate( 8 )
+	    w32Proc( hlZeroMemory, {Pnt,8} )
+	    Void = w32Func( xDPtoLP, {hDC,Pnt,1} )
+	    free( Pnt )
+	    Logfont = allocate( 60 )
+	    w32Proc( hlZeroMemory, {Logfont,60} )
+	    poke4( Logfont, -floor(abs(ptY)/10.0+0.5) )
+	    poke( Logfont+28, FontName )
+	    fontInfo[cntlID][1] = w32Func( xCreateFontIndirect, {Logfont} )
+	    free( Logfont )
+	    Void = w32Func( xSendMessage, {getHandle(cntlID),WM_SETFONT,fontInfo[cntlID][1],1} )
+
+	    CharFormat = struct_CHARFORMAT( CFM_COLOR, 0, 0, 0, synKeyColors[cntlID][3], 0, 0, {} )
+	    Void = w32Func( xSendMessage, {getHandle(cntlID),EM_SETCHARFORMAT,4,CharFormat} )
+	    free( CharFormat )
+	end if
+	Void = w32Func( xSelectObject, {hDC,fontInfo[cntlID][1]} )
+end procedure
+
+-- function: Syntax_CallB [subclassed callback routine] ----------------------------
+function Syntax_CallB( atom hWnd, atom Msg, atom wParam, atom lParam )
+	atom hDC
+	atom RichRect
+	atom TextRange, txtBuffer
+	atom FirstChar, LastChar
+	atom hRgn, hOldRgn
+	integer txtLen, start, loop, loop2
+	integer cntlID
+	sequence word
+
+	cntlID = find( hWnd, hWndtoID )
+	if not synEnableColor[ cntlID ] then
+	    return w32Func( xCallWindowProc, {oldWinHandle[cntlID],hWnd,Msg,wParam,lParam} )
+	end if
+
+	if Msg = WM_PAINT then
+	    hDC = w32Func( xGetDC, {hWnd} )
+	    Void = w32Func( xCallWindowProc, {oldWinHandle[cntlID],hWnd,Msg,wParam,lParam} )
+	    Void = w32Func( xHideCaret, {hWnd} )
+	    setREFont( cntlID, hDC, fontInfo[cntlID][2], fontInfo[cntlID][3] )
+
+	    RichRect = allocate( 16 )
+	    Void = w32Func( xSendMessage, {hWnd,#B2,0,RichRect} )   -- EM_GETRECT
+	    Void = w32Func( xSendMessage, {hWnd,#D7,0,RichRect} )   -- EM_CHARFROMPOS
+	    Void = w32Func( xSendMessage, {hWnd,#C9,Void,0} )               -- EM_LINEFROMCHAR
+	    FirstChar = w32Func( xSendMessage, {hWnd,#BB,Void,0} )  -- EM_LINEINDEX
+
+	    TextRange = allocate( 12 )
+	    poke4( TextRange, FirstChar ) -- Set minimum character to return
+	    LastChar = w32Func( xSendMessage, {hWnd,#D7,0,RichRect+8} )
+	    poke4( TextRange+4, LastChar ) -- Set maximum character to return
+
+	    hRgn = w32Func( hlCreateRectRgn, {peek4s(RichRect),peek4s(RichRect+4),peek4s(RichRect+8),peek4s(RichRect+12)} )
+	    hOldRgn = w32Func( xSelectObject, {hDC,hRgn} )
+
+	    txtLen = LastChar - FirstChar + 1
+	    txtBuffer = allocate( txtLen + 1 )
+	    poke4( TextRange+8, txtBuffer ) -- Set pointer to the buffer
+	    Void = w32Func( xSendMessage, {hWnd,#44B,0,TextRange} ) -- EM_GETTEXTRANGE
+	    free( TextRange )
+	    poke( txtBuffer + txtLen -1, #D ) -- append end of line
+
+	    -- ok, now I have the text (whew), do something with it
+	    Void = w32Func( xSetBkMode, {hDC,TRANSPARENT} )
+	    loop = 0
+	    while loop < txtLen do
+		if peek(txtBuffer+loop) = synKeyWords[cntlID][Syn_Comment][1][1] then -- maybe comment
+		    if compare( peek( {txtBuffer+loop,length(synKeyWords[cntlID][Syn_Comment][1])} ), synKeyWords[cntlID][Syn_Comment][1] ) = 0 then
+			start = loop
+			loop2 = loop + length(synKeyWords[cntlID][Syn_Comment][1])
+			Void = w32Func( xSetTextColor, {hDC,synKeyColors[cntlID][Syn_Comment]} )
+			while loop2 < txtLen do
+			    if peek(txtBuffer+loop2) = #9 then -- stupid tabs
+				Void = w32Func( xSendMessage, {hWnd,#D6,RichRect,FirstChar+start} ) -- EM_POSFROMCHAR
+				w32Proc( xDrawText, {hDC,txtBuffer+start,loop2-start,RichRect,#800} )
+				start = loop2 + 1
+			    elsif peek(txtBuffer+loop2) = #D then -- end of line
+				Void = w32Func( xSendMessage, {hWnd,#D6,RichRect,FirstChar+start} ) -- EM_POSFROMCHAR
+				w32Proc( xDrawText, {hDC,txtBuffer+start,loop2-start,RichRect,#800} )
+				loop = loop2
+				exit
+			    end if
+			    loop2 += 1
+			end while
+		    end if
+		elsif nonalpha[ peek(txtBuffer+loop) ] = -1 then -- quote (either kind)
+		    start = loop
+		    loop2 = loop + 1
+		    Void = w32Func( xSetTextColor, {hDC,synKeyColors[cntlID][Syn_Quotes]} )
+		    while loop2 < txtLen do
+			if peek(txtBuffer+loop2) = #9 then -- stupid tabs
+			    Void = w32Func( xSendMessage, {hWnd,#D6,RichRect,FirstChar+start} ) -- EM_POSFROMCHAR
+			    w32Proc( xDrawText, {hDC,txtBuffer+start,loop2-start,RichRect,#800} )
+			    start = loop2 + 1
+			elsif nonalpha[ peek(txtBuffer+loop2) ] = -2 and peek(txtBuffer+loop2+1) != #D then -- skip any escaped chars
+			    loop2 += 1
+			elsif peek(txtBuffer+loop2) = peek(txtBuffer+loop) or peek(txtBuffer+loop2) = #D then -- found the end
+			    Void = w32Func( xSendMessage, {hWnd,#D6,RichRect,FirstChar+start} ) -- EM_POSFROMCHAR
+			    w32Proc( xDrawText, {hDC,txtBuffer+start,loop2-start+1,RichRect,#800} )
+			    loop = loop2 + 1
+			    exit
+			end if
+			loop2 += 1
+		    end while
+		elsif nonalpha[ peek(txtBuffer+loop) ] = 0 then -- alpha char, check words
+		    loop2 = loop + 1
+		    while loop2 < txtLen do
+			if nonalpha[ peek(txtBuffer+loop2) ] then -- found word end
+			    word = peek( {txtBuffer+loop, loop2-loop} )
+			    for wlIter = 1 to length(synKeyWords[cntlID]) do
+				if find( word, synKeyWords[cntlID][wlIter] ) then
+				    Void = w32Func( xSetTextColor, {hDC,synKeyColors[cntlID][wlIter]} )
+				    Void = w32Func( xSendMessage, {hWnd,#D6,RichRect,FirstChar+loop} ) -- EM_POSFROMCHAR
+				    w32Proc( xDrawText, {hDC,txtBuffer+loop,loop2-loop,RichRect,#800} )
+				    exit
+				end if
+			    end for
+			    loop = loop2
+			    exit
+			end if
+			loop2 += 1
+		    end while
+		end if
+		loop += 1
+	    end while
+
+	    free( txtBuffer )
+	    free( RichRect )
+	    Void = w32Func( xSelectObject, {hDC,hOldRgn} )
+	    Void = w32Func( xDeleteObject, {hRgn} )
+	    Void = w32Func( xReleaseDC, {hWnd,hDC} )
+	    Void = w32Func( xShowCaret, {hWnd} )
+	    return( 0 )
+
+	elsif Msg = WM_CLOSE then
+	    Void = w32Func( xDeleteObject, {fontInfo[cntlID][1]} )
+	    Void = w32Func( xSetWindowLong, {hWnd,GWL_WNDPROC,oldWinHandle[cntlID]} )
+	    return( 0 )
+
+	end if
+
+	return w32Func( xCallWindowProc, {oldWinHandle[cntlID],hWnd,Msg,wParam,lParam} )
+end function
+
+-- function: syntax [creates a new syntax control] ---------------------------------
+global function syntax( sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, atom style, atom exStyle )
+	atom newCntlID
+	atom handle
+	
+	newCntlID = createEx( RichEdit, Text, ParentID, x, y, cx, cy, style, exStyle )
+	handle = getHandle( newCntlID )
+
+	hWndtoID = resizeSeq( hWndtoID, newCntlID, 0 )
+	oldWinHandle = resizeSeq( oldWinHandle, newCntlID, 0 )
+	fontInfo = resizeSeq( fontInfo, newCntlID, 0 )
+	synKeyWords = resizeSeq( synKeyWords, newCntlID, {} )
+	synKeyColors = resizeSeq( synKeyColors, newCntlID, {} )
+	synEnableColor = resizeSeq( synEnableColor, newCntlID, 0 )
+
+	synKeyWords[newCntlID] = append( synKeyWords[newCntlID], {"--"} )
+	synKeyColors[newCntlID] = append( synKeyColors[newCntlID], #FF00FF )
+	synKeyWords[newCntlID] = append( synKeyWords[newCntlID], {} )
+	synKeyColors[newCntlID] = append( synKeyColors[newCntlID], #FF0000 )
+	synKeyWords[newCntlID] = append( synKeyWords[newCntlID], {} )
+	synKeyColors[newCntlID] = append( synKeyColors[newCntlID], #000000 )
+
+	hWndtoID[ newCntlID ] = handle
+	fontInfo[ newCntlID ] = { 0, "Fixedsys", 9 }
+
+	oldWinHandle[ newCntlID ] = w32Func( xSetWindowLong, {handle,GWL_WNDPROC, call_back(routine_id("Syntax_CallB"))} )
+	Void = w32Func( xSendMessage, {handle,EM_SETTEXTMODE,41,0} )
+	Void = w32Func( xSendMessage, {handle,197,-1,0} )
+
+	synEnableColor[ newCntlID ] = 1
+
+	return newCntlID
+end function
+
+-- function: synAddWords [adds keywords to a Syntax control] -----------------------
+global function synAddWords( atom cntlID, sequence wordList, atom color )
+	synKeyWords[cntlID] = append( synKeyWords[cntlID], wordList )
+	synKeyColors[cntlID] = append( synKeyColors[cntlID], color )
+
+	return( length(synKeyWords[cntlID]) )
+end function
+
+-- procedure: synModifyWords [modifies keywords to a Syntax control] ---------------
+global procedure synModifyWords( atom cntlID, integer index, object wordList )
+	if sequence(wordList[1]) then
+		synKeyWords[cntlID][index] = wordList
+	else
+		synKeyWords[cntlID][index] = {wordList}
+	end if
+end procedure
+
+-- procedure: synSetColor [adds color info to a keyword list] ----------------------
+global procedure synSetColor( atom cntlID, integer index, atom color )
+	synKeyColors[cntlID][index] = color
+
+	if index = Syn_DefText then
+	    fontInfo[ cntlID ][1] = 0
+	end if
+end procedure
+
+-- procedure: synSetBckColor [adds color info to a keyword list] -------------------
+global procedure synSetBckColor( atom cntlID, atom color )
+	Void = w32Func( xSendMessage, {getHandle(cntlID),1091,0,color} )
+end procedure
+
+-- procedure: synReset [resets all the lists to default] ---------------------------
+global procedure synReset( atom cntlID )
+	synKeyWords = {}
+	synKeyColors = {}
+
+	synKeyWords = resizeSeq( synKeyWords, cntlID, {} )
+	synKeyColors = resizeSeq( synKeyColors, cntlID, {} )
+
+	synKeyWords[cntlID] = append( synKeyWords[cntlID], {"--"} )
+	synKeyColors[cntlID] = append( synKeyColors[cntlID], #FF00FF )
+	synKeyWords[cntlID] = append( synKeyWords[cntlID], {} )
+	synKeyColors[cntlID] = append( synKeyColors[cntlID], #FF0000 )
+	synKeyWords[cntlID] = append( synKeyWords[cntlID], {} )
+	synKeyColors[cntlID] = append( synKeyColors[cntlID], #000000 )
+end procedure
+
+-- procedure: synSetFont [modifies the font used] ----------------------------------
+global procedure synSetFont( atom cntlID, sequence Font, atom Point )
+	if fontInfo[cntlID][1] != 0 then
+	    Void = w32Func( xDeleteObject, {fontInfo[cntlID][1]} )
+	end if
+	
+	fontInfo[ cntlID ] = { 0, Font, Point }
+end procedure
+
+-- procedure: synUseColor [turns coloring on/off] ----------------------------------
+global procedure synUseColor( atom cntlID, integer on_off )
+	synEnableColor[ cntlID ] = on_off
+	repaintWindow( cntlID )
+end procedure
+
+-- register the new control
+global constant Syntax = requestUniqueID()
+registerXcontrol( Syntax, routine_id("syntax") )
+
+------------------------------------------------------------------------------------
+--  Version info:
+--
+--  1.0: initial release
+--
+--  1.1: fixed bug with '&' character in quotes added synUseColor(): Greg Haberek
+--
+------------------------------------------------------------------------------------

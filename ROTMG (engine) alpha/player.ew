@@ -1,0 +1,262 @@
+include eugl.ew
+include extra.ew
+include d3d.ew
+
+--temp varaaibles
+--atom camera_yaw
+--integer spr_players
+
+
+constant  vk_up=1
+constant  vk_down=2
+constant  vk_right=3
+constant  vk_left=4
+
+global atom player_x,player_y
+atom elapsed_time,starttime,SPEED
+
+player_x=480
+player_y=480
+
+--player_x=70
+--player_y=70
+
+integer class,imagesingle,left,right,up,down,walking,anim_time,anim_total_time,updated,lastdir
+global integer speed_stat,dex_stat,shooting
+
+
+shooting=0
+speed_stat=40
+dex_stat=970
+
+
+class=3
+imagesingle=(21*(class))
+
+left=(21*(class))
+right=(21*(class))
+down=left+7
+up=down+7
+
+walking=0
+anim_time=0
+anim_total_time=0
+updated=0
+
+lastdir=vk_down
+imagesingle=down
+
+starttime=current_time()
+
+
+
+global procedure player_class_set(integer v)
+class=v
+imagesingle=(21*(class))
+
+left=(21*(class))
+right=(21*(class))
+down=left+7
+up=down+7
+
+walking=0
+anim_time=0
+anim_total_time=0
+updated=0
+
+lastdir=vk_down
+imagesingle=down
+end procedure
+
+
+--improve collision detection
+--build  Obstacle array in map loading functionilty
+--check surrounding objects, convert them to bounding box
+
+function collision(integer x, integer y)
+  sequence list
+  list={{x-1,y},{x+1,y},{x,y-1},{x,y+1}}
+
+  --what i'm trying to do is compute the correct offsets 
+  for i=1 to length(list) do
+    if obstacle[list[i][2]][list[i][1]]!=0 then
+      
+    end if 
+  end for
+  return 0 --might return new x and y position
+end function    
+
+
+global procedure player_update()
+atom px,py
+
+updated=0
+
+elapsed_time=current_time()-starttime
+starttime=current_time()
+SPEED=(0.004 + ( (speed_stat / 75) * (0.0096 - 0.004))) * speed_ground(player_x,player_y)
+
+
+
+if key_check('A') then 
+px=player_x
+py=player_y
+ imagesingle=left
+lastdir=vk_left
+--anim_time=anim_total_time
+
+  player_x=player_x +cos(degtorad(camera_yaw+90))*(SPEED*elapsed_time)
+  player_y=player_y -sin(degtorad(camera_yaw+90))*(SPEED*elapsed_time)
+if updated=0 then
+    anim_time+=1
+    updated=1
+  end if
+if walkable[floor(player_y)][floor(player_x)]=0  then
+  player_x=px
+  player_y=py
+  
+end if
+end if
+
+
+if key_check('D') then 
+px=player_x
+py=player_y
+ imagesingle=right
+lastdir=vk_right
+--anim_time=10
+
+  player_x=player_x +cos(degtorad(camera_yaw-90))*(SPEED*elapsed_time)
+  player_y=player_y -sin(degtorad(camera_yaw-90))*(SPEED*elapsed_time)
+if updated=0 then
+    anim_time+=1
+    updated=1
+  end if
+if walkable[floor(player_y)][floor(player_x)]=0 then
+  player_x=px
+  player_y=py
+  
+end if
+end if
+
+if key_check('W') then 
+px=player_x
+py=player_y
+ imagesingle=up
+lastdir=vk_up
+--anim_time=10
+  player_x=player_x +cos(degtorad(camera_yaw))*(SPEED*elapsed_time)
+  player_y=player_y -sin(degtorad(camera_yaw))*(SPEED*elapsed_time)
+if updated=0 then
+    anim_time+=1
+    updated=1
+  end if
+if walkable[floor(player_y)][floor(player_x)]=0 then
+  player_x=px
+  player_y=py
+  
+end if
+end if
+
+if key_check('S') then 
+px=player_x
+py=player_y
+ imagesingle=down
+lastdir=vk_down
+--anim_time=10
+  player_x=player_x +cos(degtorad(camera_yaw-180))*(SPEED*elapsed_time)
+  player_y=player_y -sin(degtorad(camera_yaw-180))*(SPEED*elapsed_time)
+if updated=0 then
+    anim_time+=1
+    updated=1
+  end if
+
+if walkable[floor(player_y)][floor(player_x)]=0 then
+  player_x=px
+  player_y=py
+  
+end if
+end if
+
+
+
+--?walkable[floor(player_y)][floor(player_x)]
+
+
+
+if shooting=1 then
+  anim_total_time=5
+else
+  anim_total_time=10
+end if
+
+
+
+if anim_time>=anim_total_time then
+  anim_time=0
+  walking+=1
+  if lastdir=vk_left or lastdir=vk_right then
+    if walking>1 then
+     walking=0
+    end if
+  else
+    if walking>2 then
+      walking=0
+    end if
+  end if
+end if
+
+if lastdir=vk_left or lastdir=vk_right or shooting=1 then
+  if walking>1 then
+    walking=0
+  end if
+end if
+
+if updated=0 and shooting=0 then
+walking=0
+end if
+
+if updated=0 and shooting=1 then
+  if updated=0 then
+    anim_time+=1
+    updated=1
+  end if
+end if
+end procedure
+
+
+
+global procedure player_draw()
+
+
+--draw_spritesheet_floor(player_x, player_y, 1, spr_players, imagesingle)
+
+if lastdir=vk_left then
+  if shooting=1 then
+    
+    draw_spritesheet_floor2(player_x, player_y, 1, spr_players, imagesingle+walking+4)
+    
+  else
+
+    draw_spritesheet_floor2(player_x, player_y, 1, spr_players, imagesingle+walking)
+
+  end if
+else
+  if shooting=1 then
+    
+    draw_spritesheet_floor(player_x, player_y, 1, spr_players, imagesingle+walking+4)
+  else
+   
+    draw_spritesheet_floor(player_x, player_y, 1, spr_players, imagesingle+walking)
+  end if
+end if
+
+end procedure
+
+global procedure player_name_draw()
+  currentfont=font0
+  draw_set_color(0,0,0)
+
+  d3d_draw_text(player_x-0.3,player_y+1,"Botmaker")
+end procedure
+

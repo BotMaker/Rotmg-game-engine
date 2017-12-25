@@ -1,0 +1,317 @@
+include tooltip.ew
+
+sequence picture_button_info
+picture_button_info={}
+integer piture_button_number
+piture_button_number=0
+
+constant
+ButtonColor         = getSysColor( COLOR_BTNFACE ),
+ButtonHighlightColor= getSysColor( COLOR_BTNHIGHLIGHT ),
+ShadowColor         = getSysColor( COLOR_BTNSHADOW )
+
+procedure drawPictureButton( integer id, integer x1, integer y1,integer cx, integer cy,integer pushed,atom pixmap)
+
+    integer  x2, y2
+
+    x2 = x1 + cx - 1
+    y2 = y1 + cy - 1
+    setPenColor( id, ButtonColor )
+    drawRectangle( id, 1, x1, y1, x2+1, y2+1 )
+
+    if pushed=1 then
+        --setPenColor( id, ButtonColor )
+        --drawRectangle( id, 1, x1, y1, x2, y2 )
+        setPenColor( id, Black )
+        drawLine( id, x1, y1, x1, y2 )
+        drawLine( id, x1, y1, x2, y1 )
+        setPenColor( id, ShadowColor )
+        drawLine( id, x1+1, y1+1, x1+1, y2-1 )
+        drawLine( id, x1+1, y1+1, x2-1, y1+1 )
+        setPenColor( id, ButtonHighlightColor )
+        drawLine( id, x2, y1+1, x2, y2 )
+        drawLine( id, x1+1, y2, x2, y2 )
+    elsif pushed=0 then
+        --setPenColor( id, ButtonColor )
+        --drawRectangle( id, 1, x1, y1, x2, y2 )
+        setPenColor( id, ButtonHighlightColor )
+        drawLine( id, x1+1, y1+1, x1+1, y2 )
+        drawLine( id, x1+1, y1+1, x2, y1+1 )
+        setPenColor( id, Black )
+        drawLine( id, x2, y1, x2, y2+1 )
+        drawLine( id, x1, y2, x2+1, y2 )
+        setPenColor( id, ShadowColor )
+        --drawLine( id, x2-1, y1+1, x2-1, y2 )
+        --drawLine( id, x1+1, y2-1, x2, y2-1 )
+    end if
+    copyBlt(id,x1+2,y1+2,pixmap)
+end procedure
+
+procedure floodfill(atom id,integer id2)
+sequence size
+atom pixel1
+size= getCtlSize( id )
+setCtlSize(id2,size[1],size[2])
+drawBitmap( id2, id, 0, 0 )
+pixel1=getPixel(id2,0,0)
+	for j=0 to size[2] do
+	  for i=0 to size[1] do
+	  	if getPixel(id2,i,j)=pixel1 then
+	  	  setPixel(id2,i,j,getSysColor( COLOR_BTNFACE ))
+	  	end if
+	  end for	
+	end for
+end procedure
+
+procedure flooddimed(atom id,integer id2)
+sequence size
+atom pixel1
+size= getCtlSize( id )
+setCtlSize(id2,size[1],size[2])
+drawBitmap( id2, id, 0, 0 )
+pixel1=getPixel(id2,0,0)
+	for j=0 to size[2] do
+	  for i=0 to size[1] do
+	  	if getPixel(id2,i,j)=pixel1 then
+	  	  setPixel(id2,i,j,getSysColor( COLOR_BTNFACE ))
+	  	else
+	  	  setPixel(id2,i,j, rgb(128,128,128))
+	  	end if
+	  end for	
+	end for
+
+end procedure
+
+integer routine_id_hack
+routine_id_hack=0
+
+global function create_toolbar_button(sequence info)
+sequence size
+integer pixmap
+integer tooltip
+
+  --1 parent window  --info 1
+  --2 x              --info 2
+  --3 y              --info 3
+  --4 bitmap         --info 4
+  --5 pixmap
+  --6 width
+  --7 height
+  --8 set
+  --9 enabled
+  --10 user routine   --info 5
+  --11 id
+  --12 visible
+  --13 tooltip
+  --14 hint text      --info 6
+  size=getCtlSize(info[4])+4
+  pixmap=createEx( Pixmap, "", info[1], 0, 0, 0,0, 0, 0 )
+  floodfill(info[4],pixmap)
+  tooltip=create_tooltip({info[1],info[2],info[3],size[1],size[2],info[6],routine_id_hack})
+  piture_button_number+=1
+  picture_button_info=append(picture_button_info,{info[1],info[2],info[3],info[4],pixmap,size[1],size[2],-1,1,info[5],piture_button_number,1,tooltip,info[6]})
+  return piture_button_number	
+end function
+
+procedure draw_picture_button(atom id)
+integer x,y,width,height,set,window,visible
+atom pixmap
+  for i=1 to length(picture_button_info) do
+  	if picture_button_info[i][11]=id then
+  	  window=picture_button_info[i][1]
+  	  x=picture_button_info[i][2]
+  	  y=picture_button_info[i][3]
+  	  width=picture_button_info[i][6]
+  	  height=picture_button_info[i][7]
+  	  pixmap=picture_button_info[i][5]
+  	  set=picture_button_info[i][8]
+  	  visible=picture_button_info[i][12]
+      if visible!=1 then
+      	return
+      end if
+  	  drawPictureButton(window,x,y,width,height,set,pixmap)
+  	  exit	
+  	end if
+  end for	
+end procedure
+
+integer button_has_capture,window_has_capture
+button_has_capture=0
+window_has_capture=0
+
+global procedure toolbar_button_set_enable(atom id,integer flag)
+integer x,y,width,height,set,window,enabled
+atom pixmap,image
+  for i=1 to length(picture_button_info) do
+  	if picture_button_info[i][11]=id then
+  	  window=picture_button_info[i][1]
+  	  x=picture_button_info[i][2]
+  	  y=picture_button_info[i][3]
+  	  width=picture_button_info[i][6]
+  	  height=picture_button_info[i][7]
+  	  image=picture_button_info[i][4]
+  	  pixmap=picture_button_info[i][5]
+  	  set=picture_button_info[i][8]
+  	  enabled=picture_button_info[i][9]
+  	
+      if enabled=flag then
+      	return
+      end if
+      tooltip_set_enable(picture_button_info[i][13],flag)
+      if flag=1 then
+        --enable
+        floodfill(image,pixmap)
+      else
+        --disable
+        flooddimed(image,pixmap)
+      end if
+      picture_button_info[i][9]=flag
+      draw_picture_button(id)
+  	  exit	
+  	end if
+  end for	
+end procedure
+
+global procedure toolbar_button_set_visible(atom id,integer flag)
+integer x,y,width,height,set,window,enabled,visible
+atom pixmap,image
+  for i=1 to length(picture_button_info) do
+  	if picture_button_info[i][11]=id then
+  	  window=picture_button_info[i][1]
+  	  x=picture_button_info[i][2]
+  	  y=picture_button_info[i][3]
+  	  width=picture_button_info[i][6]
+  	  height=picture_button_info[i][7]
+  	  image=picture_button_info[i][4]
+  	  pixmap=picture_button_info[i][5]
+  	  set=picture_button_info[i][8]
+  	  enabled=picture_button_info[i][9]
+  	  visible=picture_button_info[i][12]
+  	
+      if visible=flag then
+      	return
+      end if
+      picture_button_info[i][12]=flag
+      tooltip_set_enable(picture_button_info[i][13],flag)
+      if flag=1 then
+        --enable
+        draw_picture_button(id)
+      else
+        --disable
+        setPenColor( window, ButtonColor )
+        drawRectangle( window, 1, x, y, x+width, y+height )
+      end if
+  	  exit	
+  	end if
+  end for	
+end procedure
+
+procedure mouse_picture_button(atom id,sequence params)
+integer x,y,width,height,set,window,enabled,mousex,mousey,event,visible
+  event=params[1]
+  mousex=params[2]
+  mousey=params[3]
+  for i=1 to length(picture_button_info) do
+  	if picture_button_info[i][11]=id then
+  	  window=picture_button_info[i][1]
+  	  x=picture_button_info[i][2]
+  	  y=picture_button_info[i][3]
+  	  width=picture_button_info[i][6]
+  	  height=picture_button_info[i][7]
+  	  set=picture_button_info[i][8]
+      enabled=picture_button_info[i][9]
+      visible=picture_button_info[i][12]
+      if visible!=1 then
+      	return
+      end if
+      if enabled!=1 then
+      	return
+      end if
+
+      if event=LeftDown and button_has_capture=0 and mousex>=x and mousex<=x+width and mousey>=y and mousey<=y+height then
+      	picture_button_info[i][8]=1
+      	button_has_capture=id
+      	draw_picture_button(id)
+      end if
+      if event=LeftDoubleClick and button_has_capture=0 and mousex>=x and mousex<=x+width and mousey>=y and mousey<=y+height then
+      	picture_button_info[i][8]=1
+      	button_has_capture=id
+      	draw_picture_button(id)
+      end if
+      if event=MouseMove and button_has_capture=id then
+        if window_has_capture=0 then
+          captureMouse(window)
+	      window_has_capture=1
+        end if
+      	if mousex>=x and mousex<=x+width and mousey>=y and mousey<=y+height then
+      	  if set=-1 then
+      	    picture_button_info[i][8]=1
+      	  	draw_picture_button(id)
+      	  end if
+      	else
+      	  if set=1 then
+      	  	picture_button_info[i][8]=-1
+      	  	draw_picture_button(id)
+      	  end if
+      	end if
+      end if
+      if event=LeftUp and button_has_capture=id then
+        releaseMouse()
+        window_has_capture=0
+        button_has_capture=0
+      	picture_button_info[i][8]=-1
+        if mousex>=x and mousex<=x+width and mousey>=y and mousey<=y+height then
+          draw_picture_button(id)
+          --call proc
+          if picture_button_info[i][10]>0 then
+            call_proc(picture_button_info[i][10],{picture_button_info[i][11]})
+          end if
+        end if
+      end if
+      if button_has_capture!=0 then
+      	return
+      end if
+      if event=MouseMove or event=LeftUp then
+        if mousex>=x and mousex<=x+width and mousey>=y and mousey<=y+height then
+          if picture_button_info[i][8]=-1 then
+          	picture_button_info[i][8]=0
+          	draw_picture_button(id)
+          end if
+        else
+          if picture_button_info[i][8]=0 then
+          	picture_button_info[i][8]=-1
+          	draw_picture_button(id)
+          end if
+        end if
+      end if
+  	  exit	
+  	end if
+  end for	
+end procedure
+
+global procedure draw_toolbar(integer id)
+  for i=1 to length(picture_button_info) do
+   if picture_button_info[i][1]=id then
+     draw_picture_button( picture_button_info[i][11] )
+    end if
+  end for
+end procedure
+
+global procedure mouse_toolbar(integer id,sequence params)
+  for i=1 to length(picture_button_info) do
+    if picture_button_info[i][1]=id then
+  	  mouse_picture_button( picture_button_info[i][11],params )
+    end if
+  end for	
+end procedure
+
+procedure hack(integer id)
+ 
+  for i=1 to length(picture_button_info) do
+    if picture_button_info[i][13]=id then --tooltip
+      mouse_picture_button( picture_button_info[i][11],{MouseMove,0,0} )
+    end if
+  end for
+end procedure
+
+routine_id_hack=routine_id("hack")

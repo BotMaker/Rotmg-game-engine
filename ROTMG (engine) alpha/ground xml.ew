@@ -1,0 +1,298 @@
+
+sequence ground_list,object_list
+ground_list={}
+object_list=repeat({},65536)
+
+function ground_new()
+	return {
+{"type",0},
+{"id",0},
+{"Texture",0},
+{"File",0},
+{"Index",0},
+{"Animate",0},
+{"dy",0},
+{"NoWalk",0},
+{"Speed",0},
+{"Sink",0},
+{"BlendPriority",0},
+{"RandomTexture",0},
+{"Edge",0},
+{"Corner",0},
+{"InnerCorner",0},
+{"Top",0},
+{"TopAnimate",0},
+{"RandomOffset",0},
+{"SameTypeEdgeMode",0},
+{"CompositePriority",0},
+{"MinDamage",0},
+{"MaxDamage",0},
+{"XOffset",0},
+{"YOffset",0},
+{"Push",0},
+{"Sinking",0},
+{"Color",0},
+{"Sprite",0}
+}
+
+end function
+
+constant ground=ground_new()
+
+function ground_index(sequence name)
+  for i=1 to length(ground) do
+     if equal(ground[i][1],name) then
+       return i	
+     end if
+  end for	
+end function
+
+
+global constant ground_speed=ground_index("Speed")
+global constant ground_file=ground_index("File")
+global constant ground_indexx=ground_index("Index")
+--extra data
+global constant ground_sprite=ground_index("Sprite")
+
+
+
+atom root,att,child, nchild, celement
+sequence ret,name1,attname,name2
+
+integer index
+index=0
+
+procedure process_children(atom node)
+atom nchild,att,celement
+
+	nchild=tinyxml_node_firstchild(node)
+	if nchild=0 then
+   	  return
+    end if
+
+    if tinyxml_node_nochildren(nchild)=1 then
+   	  return
+    end if
+
+
+	while nchild!=0 do
+
+      	name2=tinyxml_node_value(nchild)
+      	
+      	celement=tinyxml_node_toelement(nchild)
+      	
+        if celement!=0 then
+        	
+          att=tinyxml_frist_attribute(celement)
+          if att then
+
+            while att!=0 do
+              attname=tinyxml_attribute_name(att)
+
+              for i=1 to length(ground_list[index]) do
+      	        if equal(ground_list[index][i][1],attname) then
+      	          ground_list[index][i][2]=tinyxml_attribute_value(att)
+      		      exit
+      	        end if
+              end for
+              att=tinyxml_attribute_next(att)
+            end while
+          end if
+
+        end if
+
+        if celement!=0 then
+          ret=tinyxml_element_gettext(celement)
+          if length(ret) then
+
+	      else
+          end if
+          for i=1 to length(ground_list[index]) do
+      	      if equal(ground_list[index][i][1],name2) then
+      	        ground_list[index][i][2]=ret
+      		    exit
+      	      end if
+            end for
+        end if
+
+        if tinyxml_node_nochildren(nchild)=0 then
+   	      process_children(nchild)
+        end if
+        nchild=tinyxml_node_IterateChildren(node,nchild)
+      end while
+end procedure
+
+if tinyxml_load_file(doc,"xml\\ground.xml")=1 then
+  root=tinyxml_frist_child_element(doc, "GroundTypes")
+
+
+  att=tinyxml_frist_attribute(root)
+  if att then
+  	
+    puts(1,tinyxml_attribute_name(att)&"  ")
+
+    puts(1,tinyxml_attribute_value(att)&"\n")
+  end if
+
+  child=tinyxml_element_firstchild(root)
+
+
+
+  while child!=0 do
+
+    name1=tinyxml_node_value(child)
+    if equal(name1,"Ground") then
+      ground_list=append(ground_list, ground_new() )
+      index=length(ground_list)
+    end if
+
+
+    att=tinyxml_frist_attribute(child)
+
+    if att then
+
+      while att!=0 do
+        attname=tinyxml_attribute_name(att)
+        for i=1 to length(ground_list[index]) do
+      	  if equal(ground_list[index][i][1],attname) then
+      	    ground_list[index][i][2]=tinyxml_attribute_value(att)
+      		exit
+      	  end if
+        end for
+        att=tinyxml_attribute_next(att)
+      end while
+
+    end if
+
+
+    nchild=tinyxml_node_firstchild(child)
+    	
+      while nchild!=0 do
+      	name2=tinyxml_node_value(nchild)
+      	
+        celement=tinyxml_node_toelement(nchild)
+
+        if celement!=0 then
+        	
+
+          att=tinyxml_frist_attribute(celement)
+
+          if att then
+
+            while att!=0 do
+
+              attname=tinyxml_attribute_name(att)
+              for i=1 to length(ground_list[index]) do
+      	        if equal(ground_list[index][i][1],attname) then
+      	         ground_list[index][i][2]=tinyxml_attribute_value(att)
+      		     exit
+      	       end if
+              end for
+              att=tinyxml_attribute_next(att)
+
+            end while
+          end if
+
+        end if
+
+        if celement!=0 then
+          ret=tinyxml_element_gettext(celement)
+          if length(ret) then
+
+	      else
+          end if
+            for i=1 to length(ground_list[index]) do
+      	      if equal(ground_list[index][i][1],name2) then
+      	        ground_list[index][i][2]=ret
+      		    exit
+      	      end if
+            end for
+        end if
+
+        process_children(nchild)
+
+        nchild=tinyxml_node_IterateChildren(child,nchild)
+      end while
+      child=tinyxml_node_IterateChildren(root,child)
+  end while	
+end if
+
+
+for j=1 to length(ground_list) do
+  if str_tol(ground_list[j][1][2])=0 then
+  	--puts(1,"error\n")
+  else
+    object_list[ str_tol(ground_list[j][1][2])  ]=ground_list[j]
+  end if
+  	
+end for
+
+global function ground_delta( integer index, integer id )
+  if index=0 then
+  	return -1
+  end if
+  if length(object_list[ index ])=0 then
+  	return -1
+  end if
+
+  if integer(object_list[ index ][id][2]) then
+  	return -1
+  end if	
+
+  if length(object_list[ index ][id][2])=0 then
+  	return -1
+  else
+    return object_list[ index ][id][2]
+  end if
+
+end function
+
+
+
+global function ground_delta_mod( integer index, integer id )
+ 
+
+    return object_list[ index ][id][2]
+
+end function
+
+
+
+sequence file_list
+file_list={}
+
+procedure file_enter(sequence name)
+  for i=1 to length(file_list) do
+    if equal(file_list[i],name ) then
+      return
+    end if
+  end for
+
+  file_list=append(file_list,name)
+  puts(1,name&"\n")
+end procedure
+
+--for i=1 to length(object_list) do
+--  if length(object_list[i]) then
+    --puts(1,ground_delta(i,ground_file)&"\n")
+    --file_enter(ground_delta(i,ground_file))
+--  end if
+--end for
+
+global procedure ground_set_sprite(sequence data)
+for i=1 to length(object_list) do
+  if length(object_list[i]) then
+
+    object_list[ i ][ground_indexx][2]=str_tol(object_list[ i ][ground_indexx][2])
+
+    for j=1 to length(data) do
+      if equal(data[j][1],ground_delta(i,ground_file)) then
+          object_list[ i ][ground_sprite][2]=data[j][2]
+          --?data[j][2]
+          exit
+	end if
+      end for
+
+  end if
+end for
+end procedure

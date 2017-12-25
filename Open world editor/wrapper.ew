@@ -1,0 +1,144 @@
+--
+-- wrapper.ew - routines to help wrap DLL's
+--
+-- Ray Smith 06-Dec-2000
+--
+
+
+--*************************************************
+-- Includes
+--*************************************************
+
+include dll.e
+include machine.e
+include get.e
+
+
+--*************************************************
+-- Routines 
+--*************************************************
+
+------------------------------------------------
+-- wait_abort
+------------------------------------------------
+global procedure wait_abort(sequence msg)
+	 integer wait
+
+	 printf(1, "%s\n", {msg} )
+	 wait = wait_key()
+	 abort(1)
+
+end procedure
+
+
+------------------------------------------------
+-- link_dll - taken from win32lib - thanks David
+------------------------------------------------
+global function link_dll(sequence name)
+	 atom handle
+
+	 handle = open_dll( name )
+
+	 if handle = NULL then
+	wait_abort("Couldn't find DLL " & name)
+	 end if
+	 return handle
+
+end function
+
+------------------------------------------------
+-- link_func - taken from win32lib - thanks David
+------------------------------------------------
+global function link_func(atom dll, sequence name, sequence args, atom result)
+	 integer handle
+
+	 handle = define_c_func(dll, name, args, result)
+	 if handle = -1 then
+	wait_abort("Couldn't link to C function " & name)
+	 end if
+	 return handle
+
+end function
+
+------------------------------------------------
+-- link_proc - taken from win32lib - thanks David
+------------------------------------------------
+global function link_proc(atom dll, sequence name, sequence args)
+	 integer handle
+
+	 handle = define_c_proc(dll, name, args)
+	 if handle = -1 then
+	    wait_abort("Couldn't link to C procedure " & name)
+	 end if
+	 return handle
+
+end function
+
+
+-------------------------------------
+-- peek_sequence
+-------------------------------------
+global function peek_sequence(atom addr, integer len)
+	integer i, tmp
+	sequence seq
+
+	seq=""
+	i=0
+	tmp=peek(addr)
+	while (tmp != 0 and i<len) do
+		seq = append(seq, tmp)
+		i = i + 1
+		tmp = peek(addr+i)
+	end while
+	return seq
+
+end function
+
+-------------------------------------
+-- peek_sequence_null
+-------------------------------------
+-- peeks data out of memory and puts it into a sequence
+-- used for null terminated strings
+global function peek_sequence_null(atom addr, integer len)
+	integer i, tmp
+	sequence seq
+
+	seq=""
+	i=0
+	tmp=peek(addr)
+	while (tmp != 0 and i<len) do
+		seq = append(seq, tmp)
+		i = i + 1
+		tmp = peek(addr+i)
+	end while
+	return seq
+end function
+
+-------------------------------------
+-- poke2
+-------------------------------------
+-- pokes a 2 byte integer to 2 consecutive areas of memory
+-- code from Euphoria mailing list
+global procedure poke2(atom addr, integer num)
+	poke(addr, {num, floor(num/256)})
+end procedure
+
+
+------------------------------------------------
+-- link_var
+------------------------------------------------
+global function link_var(atom dll, sequence name)
+	 atom handle
+
+	 handle = define_c_var(dll, name)
+	 if handle = -1 then
+	    wait_abort("Couldn't link to C variable " & name)
+	 end if
+	 return handle
+
+end function
+
+
+
+
+

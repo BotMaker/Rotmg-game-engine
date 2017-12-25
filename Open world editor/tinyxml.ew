@@ -1,0 +1,215 @@
+include win32lib.ew
+constant tinyxml_dll = registerw32Library("tinyxml_dll.dll")
+constant xml_document= registerw32Function(tinyxml_dll, "xml_document", {}, C_POINTER)
+constant xml_load_file =registerw32Function(tinyxml_dll, "xml_load_file", {C_POINTER,C_POINTER}, C_INT)
+constant xml_frist_child_element=registerw32Function(tinyxml_dll, "xml_frist_child_element", {C_POINTER,C_POINTER}, C_POINTER)
+constant xml_frist_attribute=registerw32Function(tinyxml_dll, "xml_frist_attribute", {C_POINTER}, C_POINTER)
+constant xml_attribute_name=registerw32Function(tinyxml_dll, "xml_attribute_name", {C_POINTER}, C_POINTER)
+constant xml_attribute_value=registerw32Function(tinyxml_dll, "xml_attribute_value", {C_POINTER}, C_POINTER)
+constant xml_attribute_next=registerw32Function(tinyxml_dll, "xml_attribute_next", {C_POINTER}, C_POINTER)
+constant xml_element_firstchild=registerw32Function(tinyxml_dll, "xml_element_firstchild", {C_POINTER}, C_POINTER)
+constant xml_node_value=registerw32Function(tinyxml_dll, "xml_node_value", {C_POINTER}, C_POINTER)
+constant xml_node_firstchild=registerw32Function(tinyxml_dll, "xml_node_firstchild", {C_POINTER}, C_POINTER)
+constant xml_node_toelement=registerw32Function(tinyxml_dll, "xml_node_toelement", {C_POINTER}, C_POINTER)
+constant xml_node_IterateChildren=registerw32Function(tinyxml_dll, "xml_node_IterateChildren", {C_POINTER,C_POINTER}, C_POINTER)
+constant xml_element_gettext=registerw32Function(tinyxml_dll, "xml_element_gettext", {C_POINTER}, C_POINTER)
+constant xml_node_nochildren=registerw32Function(tinyxml_dll, "xml_node_nochildren", {C_POINTER}, C_INT)
+
+constant xstr_tol=registerw32Function(tinyxml_dll, "str_tol", {C_POINTER}, C_INT)
+
+
+global function str_tol(sequence hexstr)
+atom hexstr_add,result
+  hexstr_add=allocate_string(hexstr)
+  result=w32Func( xstr_tol, {hexstr_add} )
+  free(hexstr_add)
+  return result
+end function 
+
+global function tinyxml_document()
+  return w32Func( xml_document, {} )
+end function 
+
+global function tinyxml_load_file(atom doc, sequence fname)
+
+  atom result,fname_add
+
+  fname_add=allocate_string(fname)
+
+  result=w32Func( xml_load_file, { doc,fname_add } )
+
+  free(fname_add)
+  return result
+end function
+
+global function tinyxml_frist_child_element(atom doc, sequence name)
+
+  atom result,name_add
+
+  name_add=allocate_string(name)
+
+  result=w32Func( xml_frist_child_element, { doc,name_add } )
+
+  free(name_add)
+  return result
+end function
+
+global function tinyxml_frist_attribute(atom element)
+
+  return w32Func( xml_frist_attribute, { element } )
+
+end function
+
+global function tinyxml_attribute_name(atom att)
+  atom result
+  integer inc,char
+  sequence text
+
+  result=w32Func( xml_attribute_name, { att } )
+
+  if result=0 then
+  	puts(1,"asdasd\n")
+  	sleep(4)
+  end if
+  inc=0
+
+  text=""
+  while 1 do
+  	char=peek(result+inc)
+  	
+  	if char=0 then
+  		exit
+  	end if
+  	--if char!=10 then
+  	  text&=char
+  	
+  	--end if
+  	inc+=1
+  end while
+
+
+  return text
+end function
+
+
+global function tinyxml_attribute_value(atom att)
+  atom result
+  integer inc,char
+  sequence text
+
+  result=w32Func( xml_attribute_value, { att } )
+  inc=0
+
+  text=""
+  while 1 do
+  	char=peek(result+inc)
+  	
+  	if char=0 then
+  		exit
+  	end if
+  	--if char!=10 then
+  	  text&=char
+  	
+  	--end if
+  	inc+=1
+  end while
+
+
+  return text
+end function
+
+global function tinyxml_attribute_next(atom att)
+
+  return w32Func( xml_attribute_next, { att } )
+
+end function
+
+global function tinyxml_element_firstchild(atom element)
+
+  return w32Func( xml_element_firstchild, { element } )
+
+end function
+
+
+global function tinyxml_node_value(atom node)
+  atom result
+  integer inc,char
+  sequence text
+
+  result=w32Func( xml_node_value, { node } )
+  inc=0
+
+  text=""
+  while 1 do
+  	char=peek(result+inc)
+  	
+  	if char=0 then
+  		exit
+  	end if
+  	--if char!=10 then
+  	  text&=char
+  	
+  	--end if
+  	inc+=1
+  end while
+
+
+  return text
+end function
+
+global function tinyxml_node_firstchild(atom node)
+
+  return w32Func( xml_node_firstchild, { node } )
+
+end function
+
+
+global function tinyxml_node_toelement(atom node)
+
+  return w32Func( xml_node_toelement, { node } )
+
+end function
+
+
+global function tinyxml_node_IterateChildren(atom child, atom node)
+
+  return w32Func( xml_node_IterateChildren, { child ,node } )
+
+end function
+
+global function tinyxml_element_gettext(atom element)
+  atom result
+  integer inc,char
+  sequence text
+
+  result=w32Func( xml_element_gettext, { element } )
+  if result=0 then
+  	return {}
+  end if
+  inc=0
+
+  text=""
+  while 1 do
+  	char=peek(result+inc)
+  	
+  	if char=0 then
+  		exit
+  	end if
+  	--if char!=10 then
+  	  text&=char
+  	
+  	--end if
+  	inc+=1
+  end while
+
+
+  return text
+end function
+
+
+
+global function tinyxml_node_nochildren( atom node)
+
+  return w32Func( xml_node_nochildren, { node } )
+
+end function

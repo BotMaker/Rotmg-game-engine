@@ -1,0 +1,132 @@
+sequence picture_button_info
+picture_button_info={}
+integer piture_button_number
+piture_button_number=0
+
+procedure picture_button_onTimer (integer self, integer event, sequence params)
+  for i=1 to length(picture_button_info) do
+    if picture_button_info[i][1]=self then
+      copyBlt(picture_button_info[i][2],picture_button_info[i][3][1]+4, picture_button_info[i][3][2]+4, picture_button_info[i][7] )
+      killTimer(self,1)
+      exit
+    end if
+  end for
+end procedure
+
+procedure picture_button_onEvent (integer self, integer event, sequence params)
+for i=1 to length(picture_button_info) do
+  if picture_button_info[i][1]=self then
+  	
+    if params[1]=WM_LBUTTONDOWN then
+      setTimer(self,1,0)
+    elsif params[1]=WM_LBUTTONUP then
+      setTimer(self,1,0)
+    elsif params[1]=WM_PAINT then
+      setTimer(self,1,0)
+    elsif params[1]=WM_LBUTTONDBLCLK then
+      setTimer(self,1,0)
+    elsif params[1]=257 then
+      setTimer(self,1,0)
+    elsif params[1]=258 then
+      setTimer(self,1,0)
+    elsif params[1]=533 then
+      setTimer(self,1,0)
+    elsif params[1]=243 then
+      setTimer(self,1,0)
+    end if
+    exit
+  end if
+end for
+end procedure
+
+function rgbs(atom rgb)
+	return ( {and_bits(#000000FF, rgb),
+	          and_bits(#0000FF00, rgb) / #100,
+	          and_bits(#00FF0000, rgb) / #10000 } )
+end function
+
+procedure floodfill(atom id,integer id2)
+sequence size ,dib,pixel1,color
+size= getCtlSize( id )
+setCtlSize(id2,size[1],size[2])
+drawBitmap( id2, id, 0, 0 )
+dib=newDib(size[1],size[2])
+copyToDib(dib, id2, 0, 0, 0, 0, size[1], size[2])
+pixel1=getDibPixel(dib, 0, 0)
+color=rgbs(getSysColor( COLOR_BTNFACE ))
+color=dibColor(color[1],color[2],color[3])
+
+for j=0 to size[2] do
+  for i=0 to size[1] do
+   if equal(fastGetDibPixel(dib, i, j),pixel1) then
+    fastPutDibPixel(dib, i, j, color )
+   end if
+  end for	
+end for
+
+drawDib(id2, dib, 0, 0, 0, 0, size[1], size[2])
+killDib(dib)
+end procedure
+
+function remove_sequence(sequence info,integer num)
+sequence temp
+temp={}
+  for i=1 to length(info) do
+     if i=num then
+     else
+       temp=append(temp,info[i])
+     end if
+  end for
+  return temp
+end function
+
+global procedure delete_picture_button(integer id)
+  for i=1 to length(picture_button_info) do
+    if picture_button_info[i][1]=id then
+      picture_button_info=remove_sequence(picture_button_info,i)
+      exit
+    end if
+  end for
+end procedure
+
+global procedure make_picture_button(integer id, object picture)
+sequence pos,size,text,temp
+atom image
+integer parent_id,pixmap,width,width2
+  pos=getPosition(id)
+  size=getCtlSize(id)
+  text=getText(id)
+  parent_id=getParent(id)
+  setVisible(id,1)
+  if sequence(picture) then
+    image=loadBitmapFromFile(picture)
+  else
+    image=picture
+  end if
+  pixmap=createEx( Pixmap, "", parent_id, 0, 0, 0, 0, 0, 0 )
+  floodfill(image,pixmap)
+  setHandler( id, w32HEvent, routine_id("picture_button_onEvent"))
+  setHandler( id, w32HTimer, routine_id("picture_button_onTimer"))
+  setTimer(id,1,1)
+  --new remove the & char
+  temp=""
+  for i=1 to length(text) do
+    if text[i]='&' then
+    else
+      temp&=text[i]
+    end if
+  end for
+  --end new
+  width=getTextWidth(id,temp)
+  if width<size[1] then
+  	
+  	width=floor( size[1]/2 )
+  	width2=getTextWidth(id,temp)
+  	width-=floor( width2/2 )
+  	pos[1]+=(width-24)
+  end if
+
+  setText(id,"    "&text)
+  piture_button_number+=1
+  picture_button_info=append(picture_button_info,{id,parent_id,pos,size,text,image,pixmap,piture_button_number})	
+end procedure

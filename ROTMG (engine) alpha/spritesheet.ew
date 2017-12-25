@@ -1,0 +1,31 @@
+include texture.ew
+
+global constant spritesheet_texture=1
+global constant spritesheet_sprite_width=2
+global constant spritesheet_sprite_height=3
+global constant spritesheet_texture_width=4
+global constant spritesheet_texture_height=5
+global constant spritesheet_texture_tw=6
+global constant spritesheet_texture_th=7
+global constant spritesheet_texture_images_per_row=8
+
+global sequence spritesheet_list
+spritesheet_list={}
+
+integer sindex
+sindex=0
+
+global function spritesheet_new(integer tex, integer swidth,integer sheight)
+atom tw,th
+integer images_per_row
+
+tw = (swidth / texture_list[tex][1])
+th = (sheight / texture_list[tex][2])
+
+
+images_per_row= texture_list[tex][1]/swidth
+
+  spritesheet_list=append(spritesheet_list,{tex,swidth,sheight,texture_list[tex][1],texture_list[tex][2],tw,th,images_per_row})
+  sindex+=1
+  return sindex
+end function 

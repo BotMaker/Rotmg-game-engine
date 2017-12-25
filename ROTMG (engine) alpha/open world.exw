@@ -1,0 +1,1441 @@
+include eugl.ew
+include winbmp.ew
+include misc.e
+
+without warning
+without type_check
+
+--sequence keyboard_char
+--keyboard_char={}
+
+integer keyboard_char
+keyboard_char=0
+
+
+--new modual 
+include texture.ew
+include spritesheet.ew
+include font.ew
+include d3d.ew as d3d
+include extra.ew
+
+include hash.ew
+include objects.ew
+include projectile.ew
+
+global integer font0,font1,font2
+global integer spr_players
+
+include tinyxml.ew
+global atom doc
+doc= tinyxml_document()
+include "ground xml.ew"
+include "equip xml.ew"
+include "xml all.ew"
+include "projectile xml.ew"
+
+integer objectlist,hashlist,projectilelist
+objectlist=object_new()
+hashlist=hash_new()
+projectilelist=projectile_new()
+
+
+include wmap.ew
+
+global sequence walkable,obstacle
+walkable={}
+obstacle={}
+
+
+for i= 1 to 100 do
+  ?wrap_between(i,0,27)
+end for
+
+
+
+
+
+global atom camera_x,camera_y,camera_z,camera_yaw
+camera_yaw=90
+camera_x=86
+camera_y=84
+camera_z=21 --values from rotmg changred from 12
+
+global function speed_ground(atom x, atom y)
+atom speed_mut
+  x=floor(x)
+  y=floor(y)
+
+  	
+  speed_mut = 1
+  if sequence(ground_delta(mapdata[y][x],ground_speed)) then
+    speed_mut = real( ground_delta(mapdata[y][x],ground_speed) )
+  end if
+
+  return speed_mut 
+    
+end function
+
+
+
+include player.ew
+
+
+procedure map_load()
+  --wmap_load("map.wmap")
+  --wmap_load("nexus.wmap")
+  wmap_load("world1.wmap")
+  obstacle=objectdata
+
+  player_x=floor(map_width/2)
+  player_y=floor(map_height/2)
+  
+  --player_x=1127
+  --player_y=1122
+
+  for y=1 to map_height do
+    walkable=append(walkable,repeat(1,map_width))
+    for x=1 to map_width do
+      if objectdata[y][x]>0 then
+      if sequence(object_delta(objectdata[y][x],object_OccupySquare)) then
+        walkable[y][x]=0
+      end if
+      end if
+    end for
+  end for
+
+end procedure
+map_load()
+
+procedure map_load2()
+    integer fn,char1,char2,width,height,count,xx,yy,object_handle,object_type
+
+
+  fn=open("mapdata.txt","rb")
+  char1=getc(fn)
+  char2=getc(fn)
+  width=(char2*256)+char1
+  char1=getc(fn)
+  char2=getc(fn)
+  height=(char2*256)+char1
+  
+  map_width=width
+  map_height=height
+  player_x=floor(width/2)
+  player_y=floor(height/2)
+
+  for y=1 to height do
+    mapdata=append(mapdata,repeat(0,width))
+    walkable=append(walkable,repeat(1,width))
+	obstacle=append(obstacle,repeat(1,width))
+	sizedata=append(sizedata,repeat(1,width))
+    for x=1 to width do
+      char1=getc(fn)
+      char2=getc(fn)
+      mapdata[y][x]=(char2*256)+char1
+      --if mapdata[y][x]=0 then
+       --puts(1,"found\n")
+      --end if
+    end for
+  end for
+  close(fn)
+
+
+  fn=open("mapobjects.txt","rb")
+  char1=getc(fn)
+  char2=getc(fn)
+  count=(char2*256)+char1
+  for i=1 to count do
+    char1=getc(fn)
+    char2=getc(fn)
+    object_type=(char2*256)+char1
+
+  	char1=getc(fn)
+    char2=getc(fn)
+    xx=(char2*256)+char1
+    char1=getc(fn)
+    char2=getc(fn)
+    yy=(char2*256)+char1
+
+	--?xx
+	--?yy
+	--sleep(1)
+	sizedata[yy][xx]=0
+	obstacle[yy][xx]=object_type
+	if obstacle[yy][xx]>0 then
+      if sequence(object_delta(obstacle[yy][xx],object_OccupySquare)) then
+        walkable[yy][xx]=0
+		
+      end if
+      end if
+  end for
+  
+  close(fn)
+end procedure
+--map_load2()
+
+atom ttt
+integer facedrawn,count
+integer fps
+fps=0
+ttt=90
+facedrawn=0  
+count=0
+
+integer mousex,mousey,mouse_button
+mousex=0
+mousey=0
+mouse_button=0
+integer frames,loop_id
+constant VK_END= #23, VK_HOME= #24
+
+atom angle
+angle=0
+
+
+atom xxx,mode
+xxx=0
+mode=0
+
+sequence object_bitmaps
+object_bitmaps={}
+
+
+procedure init()
+        integer tex,spr
+
+        --disable vsyps
+        if wgl_supportsExtension("WGL_EXT_swap_control") then
+		wgl_enableExtension("WGL_EXT_swap_control")
+		
+                if wgl_swapIntervalEXT(0) then
+     		end if
+	end if
+
+        d3d_start()
+
+        d3d_set_perspective(1)
+
+        -- Generate texture IDs 
+	gl_genTextures(texNum, texID)
+	
+
+	-- Load textures 
+	tex=texture_load("data\\grass.bmp")
+        tex=texture_load("data\\grassd.bmp")
+        tex=texture_load("data\\drit.bmp")
+        tex=texture_load("data\\tree.bmp")
+        tex=texture_load("data\\tree2.bmp")
+        tex=texture_load("data\\temp.bmp")
+        tex=texture_load("data\\a.bmp")
+
+        spr=spritesheet_new(texture_load("data\\lofiEnvironment.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiEnvironment", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiEnvironment2.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiEnvironment2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiEnvironment3.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiEnvironment3", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+ 
+        spr=spritesheet_new(texture_load("data\\lofiObj3.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj3", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+
+        --new for equipment bitmaps
+        spr=spritesheet_new(texture_load("data\\lofiChar8x8.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiChar8x8", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiChar28x8.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiChar28x8", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj2.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj4.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj4", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj5.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj5", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj6.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj6", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\playersSkins.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"playersSkins", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr_players=spritesheet_new(texture_load("data\\players.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"players", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+ 
+        
+        spr=spritesheet_new(texture_load("data\\lofiObjBig.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"lofiObjBig", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiProjs.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiProjs", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        --new
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dEncounters.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dEncounters", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dEncounters2.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dEncounters2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dMountains1.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dMountains1", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dMountains2.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dMountains2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16rEncounters.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16rEncounters", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+
+
+        ground_set_sprite(object_bitmaps)
+
+        equip_set_sprite(object_bitmaps)
+
+        object_set_sprite(object_bitmaps)
+
+        projectile_set_sprite(object_bitmaps)
+
+        font0=font_load("font.txt","data\\bitmap2.bmp")
+        font1=font_load("font2.txt","data\\font2.bmp")
+        font2=font_load("font3.txt","data\\font3.bmp")
+
+
+        gl_enable (GL_TEXTURE_2D)
+
+        frames = 0
+	euglTimerFunc(31,loop_id,0)
+
+        gl_enable (GL_BLEND)
+        gl_blendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        gl_alphaFunc(GL_GREATER,0.5)
+        gl_enable ( GL_ALPHA_TEST)
+		
+		--gl_polygonMode(GL_FRONT_AND_BACK,GL_LINE)
+  
+        ewShowCursor(1)
+end procedure
+
+
+
+
+
+
+
+
+
+
+
+procedure projectile_update_new()
+atom dist,period,theta
+
+atom amplitude,frequency
+
+sequence list,object_list
+integer bullet_id,ctype
+atom x,y,start_time,angle,elapsed_time,vec,modvec,d,angle2
+
+integer lifetime,speed
+
+--collision
+integer object_type
+
+sequence stats
+
+integer found_solid, stype
+atom a,b,c
+
+
+
+    list=projectile_get_list(projectilelist)
+
+    object_list=object_get_list( objectlist )
+
+    for j=1 to length(list) do
+
+      if length(list[j]) then
+        x=list[j][projectile_x]
+        y=list[j][projectile_y]
+        angle=list[j][projectile_angle]
+        start_time=list[j][projectile_start_time]
+        bullet_id=list[j][projectile_bullet_id]
+        ctype=list[j][projectile_type]
+
+        angle2=angle
+        angle=toRotmgAngle(angle)
+
+        lifetime=real(object_delta(ctype, object_lifetime))
+        speed=real(object_delta(ctype, object_speed))
+
+      	elapsed_time=current_time()-start_time
+      	if elapsed_time>=lifetime then
+      	  projectile_free(projectilelist,j)
+	    else
+	
+            dist = (elapsed_time / 1000.0) * (speed / 10.0)
+            if is_even(bullet_id) then
+              period=0
+            else
+              period=PI
+            end if
+
+            if sequence(object_delta(ctype,object_wavy)) then
+              theta = angle + (PI * 64) * sin(period + 6 * PI * (elapsed_time / 1000))
+              x += dist * cos(theta)
+              y += dist * sin(theta)
+            elsif sequence(object_delta(ctype,object_parametric)) then
+
+                theta = elapsed_time / lifetime * 2 * PI
+                a = sin(theta) --* (ProjectileId % 2 != 0 ? 1 : -1);
+                b = sin(theta * 2)-- * (ProjectileId % 4 < 2 ? 1 : -1);
+                c = sin(angle)
+                d = cos(angle)
+                x += (a * d - b * c) * 1
+                y += (a * c + b * d) * 1
+            else
+              x += dist * cos(angle)
+              y += dist * sin(angle)
+              if sequence(object_delta(ctype,object_amplitude)) then
+                --puts(1,"amplitude\n")
+                amplitude=real(object_delta(ctype,object_amplitude))
+                frequency=real(object_delta(ctype,object_frequency))
+
+                d = amplitude * sin(period + elapsed_time / lifetime * frequency * 2 * PI)
+                x += d * cos(angle + PI / 2)
+                y += d * sin(angle + PI / 2)
+
+              end if
+            end if
+
+          stype=real(object_projectile_delta(ctype, 1,object_projectile_ObjectId))
+
+          if sequence(object_projectile_delta(ctype, 1,object_projectile_size)) then
+            --?
+            draw_spritesheet_floor_angle(x,y, real(object_projectile_delta(ctype, 1,object_projectile_size))/100 , projectile_delta_mod(stype,projectile_sprite), projectile_delta_mod(stype,projectile_indexx),(-angle2-(90+45))+180 )
+
+          else
+            draw_spritesheet_floor_angle(x,y, 1, projectile_delta_mod(stype,projectile_sprite), projectile_delta_mod(stype,projectile_indexx),(-angle2-(90+45))+180 )
+          end if
+          
+          if walkable[floor(y)][floor(x)]=0  then
+            projectile_free(projectilelist,j)
+  
+          end if
+
+      	end if
+
+      end if	
+
+    end for
+
+
+end procedure
+
+
+
+
+
+
+
+
+integer selected
+selected=0
+
+sequence inv
+  inv=repeat({-1,0},12)
+
+
+  --17, 11, 14, 9, wizzard
+  inv[1][1]=#C03
+  inv[1][2]=0 --slotype
+  inv[2][2]=11
+  inv[3][2]=14
+  inv[4][2]=9
+
+  inv[5][1]=#A8D
+  inv[5][1]=#B24
+  --inv[5][2]=real(equip_delta_mod(inv[5][1],equip_slotType))
+
+  inv[6][1]=#910
+  
+ 
+  inv[7][1]=#C04
+  
+  
+
+  inv[8][1]=#915
+  
+
+  inv[9][1]=#C24
+  
+
+  inv[10][1]=#C50
+
+  --inv[11][1]=object_type_from_name("Potion of Life")
+
+  inv[12][1]=object_type_from_name("Arbiters Wrath")
+
+atom click_time
+click_time=0
+
+integer preselected,premx,premy
+preselected=0
+premx=0
+premy=0
+
+atom hover_time
+hover_time=0
+
+
+procedure draw_description_text(integer x, integer y ,sequence text)
+  sequence lines
+  integer pos,count
+  pos=1
+  count=0
+  lines={}
+
+  for i=1 to length(text) do
+    if text[i]='_' then
+      text[i]=' '
+    end if
+  end for
+
+  for i=1 to length(text) do
+    count+=1
+    if count=30 then --char limt per line
+      lines=append(lines,text[pos..i])
+      pos=i+1
+      count=0
+    elsif i=length(text) then
+      lines=append(lines,text[pos..i])
+      pos=i+1
+      count=0
+    end if
+  end for
+
+  for i=1 to length(lines) do
+    draw_text(x,y,lines[i])
+    y+=20
+  end for
+  
+end procedure
+
+
+procedure gui_draw_inv_slots()
+  integer x ,y,index,item,slot,startx,starty
+  
+  --610
+  --370
+  startx=610
+  starty=370-40
+
+  x=0
+  y=0
+
+  if premx!=mousex or premy!=mousey then
+    premx=mousex
+    premy=mousey
+    hover_time=current_time()+500
+  end if
+
+  currentfont=font0
+
+  draw_set_color(179,179,179)
+  draw_text(620, 300,"SPD-"&sprint(speed_stat))
+
+  draw_set_color(179,179,179)
+  draw_text(720, 300,"DEX-"&sprint(dex_stat))
+
+
+  for i=1 to 12 do
+
+    if mousex>=startx+x and mousex<=startx+40+x and mousey>=starty+y and mousey<=starty+40+y then
+
+
+     if selected=0 and inv[i][1]!=-1 and mouse_button=1 and shooting=0 then
+       selected=i
+       mouse_button=0
+
+       if preselected=selected and click_time>current_time() then
+         preselected=0
+
+         --double click behavior
+
+         if inv[i][1]=object_type_from_name("potion of speed") then
+           if speed_stat<75 then
+             speed_stat+=1
+             inv[i][1]=-1
+           end if
+         elsif inv[i][1]=object_type_from_name("Potion of Dexterity") then
+           if dex_stat<75 then
+             dex_stat+=1
+             inv[i][1]=-1
+           end if
+         end if
+
+
+       end if
+
+       click_time=current_time()+150
+       preselected=selected
+
+     end if
+     
+    end if
+
+    draw_set_color(84,84, 84)
+    draw_rectangle(startx+x,starty+y, startx+40+x,starty+40+y, 0)
+    
+    currentfont=font2
+    draw_set_color(54,54,54)
+
+    if inv[i][1]=-1 or selected=i and i>4 then
+      draw_text(startx+x+8,starty+y,sprint(i-4))
+    end if
+
+    if i=selected then
+
+    else
+      if inv[i][1]!=-1 then
+        index=inv[i][1]
+        draw_spritesheet_texture_ext(startx+3+x,starty+3+y,equip_delta_mod(index,equip_sprite),  equip_delta_mod(index,equip_indexx),34,34)
+      end if
+    end if
+
+    x+=44
+
+    if i=4 or i=8 then
+      y+=44
+      x=0
+    end if
+
+
+  end for
+
+  if selected!=0 then
+
+    x=0
+    y=0
+
+    if inv[selected][1]!=-1 then
+      
+      index=inv[selected][1]
+      if click_time<current_time() then
+        draw_spritesheet_texture_ext(mousex-16,mousey-16,equip_delta_mod(index,equip_sprite),  equip_delta_mod(index,equip_indexx),34,34)
+      else
+        for i=1 to 12 do
+          if selected=i then
+            exit
+          end if
+          x+=44
+          if i=4 or i=8 then
+            y+=44
+             x=0
+          end if
+        end for
+
+        draw_spritesheet_texture_ext(startx+3+x,starty+3+y,equip_delta_mod(index,equip_sprite),  equip_delta_mod(index,equip_indexx),34,34)
+      end if
+    end if
+
+
+    x=0
+    y=0
+
+    if mouse_button=2 then --left up
+
+
+      if mousex<600 then
+        inv[selected][1]=-1
+        selected=0
+        return
+      end if
+      
+      for i=1 to 12 do
+
+        if mousex>=startx+x and mousex<=startx+40+x and mousey>=starty+y and mousey<=starty+40+y and selected!=i then
+           item=inv[i][1]
+
+          if inv[i][2]=real(equip_delta_mod(inv[selected][1],equip_slotType)) then
+
+                        
+
+            
+            if inv[i][1]!=-1 then
+              slot=real(equip_delta_mod(inv[i][1],equip_slotType))
+            else
+              slot=0
+            end if
+
+            inv[i][1]=inv[selected][1]
+            
+
+            inv[selected][1]=item
+         
+            
+            
+            exit
+
+          elsif inv[i][2]=0 then --selected item is moving to a any item slot
+            if selected<=4 then
+              if inv[i][1]!=-1 then
+                slot=real(equip_delta_mod(inv[i][1],equip_slotType))
+                if slot=real(equip_delta_mod(inv[selected][1],equip_slotType)) then
+                   inv[i][1]=inv[selected][1]
+            
+
+                  inv[selected][1]=item
+                end if
+              else
+                inv[i][1]=inv[selected][1]
+            
+
+                  inv[selected][1]=item
+              end if
+            else
+              inv[i][1]=inv[selected][1]
+            
+
+              inv[selected][1]=item
+            end if
+
+          end if
+          
+        end if
+        
+        x+=44
+
+        if i=4 or i=8 then
+          y+=44
+          x=0
+        end if
+
+      end for
+
+      selected=0
+    end if
+  end if
+
+  x=0
+  y=0
+  if selected=0 then
+    for i=1 to 12 do
+     if inv[i][1]!=-1 and mousex>=startx+x and mousex<=startx+40+x and mousey>=starty+y and mousey<=starty+40+y then
+
+      if hover_time<current_time() then
+        
+
+        draw_set_color(54,54,54)
+        draw_rectangle(mousex-300,(mousey-200),(mousex-300)+240,(mousey-40),0)
+
+        draw_set_color(0,0,0)
+        draw_rectangle(mousex-300,(mousey-200),(mousex-300)+240,(mousey-40),1)
+
+      
+        currentfont=font0
+        draw_set_color(255,255,255)
+
+        draw_description_text(mousex-300,mousey-200,equip_delta_mod(inv[i][1],equip_description))
+        --draw_text(mousex-200,mousey-200,equip_delta_mod(inv[i][1],equip_description))
+      end if
+      
+     end if
+
+    x+=44
+
+    if i=4 or i=8 then
+      y+=44
+      x=0
+     end if
+    end for
+  end if
+
+  
+end procedure
+
+
+procedure mark_walkable()
+  sequence object_list
+  integer object_type
+  atom x,y
+
+  object_list=object_get_list( objectlist )
+ 
+  for k=1 to length(object_list) do
+    if length(object_list[k]) then
+
+     object_type=object_get_type(objectlist,k)
+     x=object_get_x(objectlist,k)
+     y=object_get_y(objectlist,k)
+     --puts(1,object_delta(object_type,object_file)&"\n" )
+     if sequence(object_delta(object_type,object_OccupySquare)) then
+       walkable[floor(y)][floor(x)]=0
+       
+     end if
+    end if
+  end for
+
+end procedure
+
+--mark_walkable()
+
+
+procedure render2()
+  sequence object_list
+  integer object_type,mult
+  atom x,y
+
+  object_list=object_get_list( objectlist )
+ 
+  for k=1 to length(object_list) do
+    if length(object_list[k]) then
+
+     object_type=object_get_type(objectlist,k)
+     x=object_get_x(objectlist,k)
+     y=object_get_y(objectlist,k)
+     
+     if x>=floor(camera_x)-12 and x<=floor(camera_x)+6 and y>=floor(camera_y)-10 and y<=floor(camera_y)+8 then
+       mult=1
+       if sequence(object_delta(object_type, object_animated)) then
+         mult=7
+       end if
+
+       if sequence(object_delta(object_type, object_size)) then
+         --if object_type=8748 then
+         --  ?object_delta_mod(object_type,object_indexx)
+         --end if
+         --draw_spritesheet_tile6(object_get_x(objectlist,k),object_get_y(objectlist,k),  real(object_delta(object_type, object_size))/100, object_delta_mod(object_type,object_sprite), mult*object_delta_mod(object_type,object_indexx) )
+       else
+        --draw_spritesheet_tile2(object_get_x(objectlist,k),object_get_y(objectlist,k), object_delta_mod(object_type,object_sprite), mult*object_delta_mod(object_type,object_indexx) )
+       end if
+
+     end if
+    end if
+  end for
+
+
+ 
+end procedure
+
+
+procedure render()
+  integer mult,object_type
+  atom v
+
+  v=0
+
+
+  for y=floor(camera_y)-10 to floor(camera_y)+18 do
+    for x=floor(camera_x)-12 to floor(camera_x)+16 do
+
+      object_type=obstacle[y][x]
+
+      if  object_type>0 and x>0 and y>0 and x<map_width and y<map_height then
+      mult=1
+
+      if sequence(object_delta(object_type, object_animated)) then
+        mult=7
+      end if
+
+      if sequence(object_delta(object_type, object_size)) then
+
+       if object_delta_mod(object_type,object_sprite)!=0 then
+        if sizedata[y][x]!=0 then
+          draw_spritesheet_tile6(x,y,  sizedata[y][x]/100, object_delta_mod(object_type,object_sprite), mult*object_delta_mod(object_type,object_indexx) ,v )
+        else
+          draw_spritesheet_tile6(x,y,  real(object_delta(object_type, object_size))/100, object_delta_mod(object_type,object_sprite), mult*object_delta_mod(object_type,object_indexx),v )
+        end if
+       end if
+
+      else
+        if object_delta_mod(object_type,object_sprite)!=0 then
+          
+        if sizedata[y][x]!=0 then
+          draw_spritesheet_tile6(x,y,  sizedata[y][x]/100, object_delta_mod(object_type,object_sprite), mult*object_delta_mod(object_type,object_indexx),v )
+        else
+         draw_spritesheet_tile2(x,y, object_delta_mod(object_type,object_sprite), mult*object_delta_mod(object_type,object_indexx),v )
+        end if
+          --draw_spritesheet_tile2(x,y, object_delta_mod(object_type,object_sprite), mult*object_delta_mod(object_type,object_indexx) )
+        end if
+      end if
+
+      v+=0.001
+      end if
+      
+    end for
+  end for
+
+
+ 
+end procedure
+
+
+
+integer speed,radius,targetRadius
+atom ex,ey
+ex=70
+ey=75
+
+speed=4
+radius=7
+targetRadius=4
+
+atom vector_x,vector_y
+vector_x=0
+vector_y=0
+
+
+
+function Validate(atom x, atom y)
+
+   if x < 1 or x >= 128 or y < 0 or y >= 128 then
+       return 0
+   end if
+
+   if walkable[floor(y)][floor(x)] != 1 then
+      return 0
+   end if
+
+   return 1
+end function
+
+function ValidateAndMove(atom x, atom y)
+  if (Validate(x, y)) then
+     --Host.Self.Move(x, y)
+    ex=x
+    ey=y
+  --elsif (Validate(Host.Self.X, y)) then
+    --Host.Self.Move(Host.Self.X, y)
+  --elsif (Validate(x, Host.Self.Y))    
+    --Host.Self.Move(x, Host.Self.Y)
+  else
+    return 0
+  end if
+            return 1
+end function
+
+
+
+function GetMagnitude( )
+   return sqrt(vector_x * vector_x + vector_y * vector_y)
+end function
+
+procedure Normalize()
+
+    atom  magnitude
+    magnitude = GetMagnitude()
+
+    if (magnitude = 0.0) then
+        magnitude = 0.000001
+    end if
+
+    vector_x /= magnitude
+    vector_y /= magnitude
+end procedure
+
+procedure Multpile(atom v)
+    vector_x *= v
+    vector_y *= v
+end procedure
+
+
+function DistSqr()
+atom dx,dy
+  dx = player_x - ex
+  dy = player_y - ey
+  return dx * dx + dy * dy
+end function
+
+function Dist()
+  return sqrt(DistSqr())
+end function
+
+
+
+function TickCore(atom time)
+atom dist
+atom tx,ty,x,y
+integer bool
+
+--speed=
+ 
+dist = radius --search area for nearest player
+
+ dist =Dist() --dist to nearest player
+ --?dist
+
+ if (dist > targetRadius) then
+
+   tx = player_x --+ rand.Next(-2, 2) / 2f
+   ty = player_y --+ rand.Next(-2, 2) / 2f
+
+   if (tx != ex or ty != ey) then
+     x = ex
+     y = ey
+     vector_x=tx
+     vector_y=ty
+     vector_x-=ex
+     vector_y-=ey
+     Normalize()
+     
+     --vect *= (speed / 1.5f) * (time / 1000f)
+     Multpile((speed / 1.5) * (time / 1000.0))
+
+     bool=ValidateAndMove(ex + vector_x, ey + vector_y)
+   end if
+
+   return 1
+  
+ else 
+   return 0
+ end if
+end function
+
+
+
+atom remainingDist,sx,sy
+remainingDist=0
+sx=0
+sy=0
+
+function rand2()
+ sequence list
+ list={-1,0,1,2}
+ return list[rand(length(list))]
+end function
+
+function TickCore2(atom time)
+atom dist
+integer bool,ret
+
+dist = (speed / 1.5) * (time / 1000.0)
+remainingDist -= dist
+bool=ValidateAndMove(ex + sx * dist, ey + sy * dist)
+
+if remainingDist <= 0 then
+  
+  sx = rand2()
+  sy = rand2()
+
+  remainingDist = dist + dist * (0.01700087 * 0.1 - 0.05)
+  ret = 1
+else
+  ret = 0
+end if
+  return ret
+end function
+
+
+sequence input_string
+input_string=""
+
+integer input_onoff
+input_onoff=0
+
+procedure draw()
+
+atom frametime,deltatime 
+integer index
+
+camera_x=player_x+2
+camera_y=player_y+1
+
+d3d_set_count(0)
+
+    frametime =current_time()
+
+    gl_clear(GL_COLOR_BUFFER_BIT + GL_DEPTH_BUFFER_BIT)
+
+	--normal projection 
+    --d3d_set_projection(camera_x,camera_y,camera_z, camera_x+cos(camera_yaw*PI/180), camera_y-sin(camera_yaw*PI/180), camera_z, 0,0,0.001)
+    d3d_set_projection(camera_x,camera_y,camera_z, camera_x+cos(camera_yaw*PI/180), camera_y-sin(camera_yaw*PI/180), 0, 0,0,1)
+
+
+    for y=floor(camera_y)-20 to floor(camera_y)+18 do
+      for x=floor(camera_x)-22 to floor(camera_x)+16 do
+         if x>0 and y>0 and x<map_width and y<map_height then
+         index=mapdata[y][x]
+
+         if index>0 then
+           draw_spritesheet_tile(x,y,ground_delta_mod(index,ground_sprite), ground_delta_mod(index,ground_indexx) )
+           
+         end if
+         end if
+      end for
+    end for
+
+  render()
+
+ 
+  
+  gl_bindTexture (GL_TEXTURE_2D, 7)
+
+  --draw_texturesheet_floor(80,80, 1,7,   21+21,  0.1+(0.1/-80))
+  --draw_texturesheet_floor(80.5, 78+xxx,1,7,  21+21,  0.1+(0.1/-(78+xxx)))
+
+  draw_spritesheet_floor(ex,ey, 1, spr_players, 21+21)
+
+
+  player_draw()
+  --player_name_draw()
+  projectile_update_new()
+
+
+  --draw_texturesheet_wall(75, 75, 1, 9, 144, 0.1)
+  --draw_texturesheet_wall(84, 83, 1, 9, 144, 0.1)
+  --draw_texturesheet_wall(85, 83, 1, 9, 144, 0.1)
+  --draw_texturesheet_wall(86, 83, 1, 9, 144, 0.1)
+
+  --draw_texturesheet_wall(83, 82, 1, 9, 144, 0.1)
+  --draw_texturesheet_wall(84, 82, 1, 9, 144, 0.1)
+  --draw_texturesheet_wall(85, 82, 1, 9, 144, 0.1)
+
+  d3d_set_projection_ortho(0,0,800,600,0)
+  d3d_set_hidden(0)
+  draw_set_color(128,128,128)
+  d3d:draw_line(0,0,100,100)
+
+  draw_set_color(54,54,54)
+  draw_rectangle(600,0,800,600,0)
+
+
+  gui_draw_inv_slots()
+
+  for i=1 to 1 do
+   -- draw_texture(608,408,4)
+  end for
+  
+
+
+  currentfont=font0
+  draw_set_color(255,0,0)
+  --draw_text(0,0,"suck on it")
+  currentfont=font1
+  draw_set_color(0,255,0)
+  --draw_text(0,40,"abcdefghijklmnopqurstuvwxyz")
+
+
+
+  if keyboard_char!=0 then
+    if keyboard_char=13 then 
+      input_onoff=not(input_onoff)
+      keyboard_char=0
+      if input_onoff=0 then--execute commands
+        for i=5 to 12 do --inv space
+         if inv[i][1]=-1 then
+           inv[i][1]=object_type_from_name(input_string)
+           exit
+         end if
+        end for
+      end if
+      
+      input_string=""
+    end if
+    
+  end if
+
+if input_onoff=1 then
+
+  if keyboard_char!=0 then
+    if keyboard_char>='A' and keyboard_char<='Z' then    
+     input_string&=keyboard_char+26+6
+    end if
+    if keyboard_char=32 then 
+      input_string&=keyboard_char
+    end if
+    if keyboard_char=8 then
+      if length(input_string) then
+        input_string=input_string[1..length(input_string)-1]
+      end if
+    end if
+    keyboard_char=0
+  end if
+
+  draw_set_color(54,54,54)
+  draw_rectangle(0,580,600,600,0)
+  currentfont=font1
+  draw_set_color(255,255,255)
+  draw_text(0,600-20,input_string)
+end if
+  
+
+
+  
+  d3d_set_hidden(1)
+
+    if ewSwapBuffers(glhDC) then   
+    end if
+
+    frames += 1
+
+    deltatime=current_time()-frametime
+
+
+    
+    --?deltatime
+
+    if deltatime <16 then
+      --usleep(16-deltatime)
+      --?16-deltatime
+      --?deltatime
+    end if
+
+   --?rand(2)
+
+
+end procedure
+
+atom start_time
+start_time=time()+1
+
+
+integer yyy
+yyy=0
+
+atom frametime,deltatime
+frametime =current_time()
+
+
+
+function rate_of_fire(integer ctype)
+atom rate
+  rate= (0.0015 + ((dex_stat / 75) * (0.008 - 0.0015)))
+  if sequence(object_delta(ctype,object_rateoffire)) then
+    return ((1 / rate) * (1 / real(object_delta(ctype,object_rateoffire))))
+  end if
+  return ((1 / rate))
+end function
+
+atom shoot_time
+shoot_time=0
+
+
+integer bullet_id
+bullet_id=0
+
+procedure shoot()
+integer numofshoot,arcgap,ret
+atom x,y
+
+  shooting=1
+  if sequence(object_delta(inv[1][1], object_numprojectiles)) then
+    numofshoot=real(object_delta(inv[1][1], object_numprojectiles))
+  else
+    numofshoot=1
+  end if
+  
+  if sequence(object_delta(inv[1][1], object_arcgap)) then
+    arcgap=real(object_delta(inv[1][1], object_arcgap))
+  else
+    arcgap=0
+  end if
+
+x=0
+y=0
+
+  if arcgap=0 and numofshoot=2 then
+    --x=-0.5*cos(degtorad(get_angle_to(300,300,mousex,mousey)))  
+    --y=-0.5*-sin(degtorad(get_angle_to(300,300,mousex,mousey)))   
+  end if
+
+
+  for i=1 to numofshoot do
+     --res=projectile_enemy_enter(client_list[client][client_projectile_enemy],sx, sy,  (angle + (angleInc * i)), current_time(), bulletId,  ownerId, bulletType+1, ownerId)
+
+     ret=projectile_enter(projectilelist,player_x+x,player_y+y, get_angle_to(300,300,mousex,mousey)+(arcgap * i), current_time() ,bullet_id, inv[1][1] )
+     bullet_id+=1
+  
+       if arcgap=0 and numofshoot=2 then
+         --x=0.5*cos(degtorad(get_angle_to(300,300,mousex,mousey)))  
+         --y=0.5*-sin(degtorad(get_angle_to(300,300,mousex,mousey)))   
+       end if
+     
+  end for
+  
+end procedure 
+
+
+integer player_class
+player_class=1
+
+procedure loop(integer timerID)
+integer ret
+deltatime=current_time()-frametime
+frametime =current_time()
+ 
+  shooting=0
+  yyy+=1
+  if start_time<time() then
+    fps=frames
+    frames = 0
+    start_time=time()+1
+    --?time()
+    --?yyy
+    yyy=0
+     euglSetWindowTitle( sprintf("%d fps.",fps)&sprintf(" %f ",camera_x)&sprintf(" %f ",camera_y)&sprintf(" %f ",camera_z)&sprintf(" %d ", d3d_get_count())&sprintf(" %d ",mousex)&sprintf(" %d ",mousey) )
+  
+  end if
+
+  --ttt+=10
+--?ttt
+
+ if mode=0 then
+  xxx+=0.1
+  angle+=6
+else
+  xxx-=0.1
+  angle+=6
+  end if
+  if xxx>4 then
+    mode=1
+  elsif xxx<0 then
+   mode=0
+  end if
+  
+  if key_check(VK_LEFT) then 
+    camera_yaw+=4
+    --map_load2()
+	--player_class-=1
+	--if player_class<0 then
+	--  player_class=14
+	--end if
+	--player_class_set(player_class)
+  end if
+    
+  if key_check(VK_RIGHT) then 
+    camera_yaw-=4
+	--player_class-=1
+	--if player_class>14 then
+	--  player_class=0
+	--end if
+	--player_class_set(player_class)
+  end if
+
+  if key_check('A') then 
+    camera_x = camera_x + (cos (degtorad(camera_yaw+90)) * .5)
+    camera_y = camera_y + -(sin (degtorad(camera_yaw+90)) * .5)
+  end if
+    
+  if key_check('D') then 
+    
+    camera_x = camera_x + (cos (degtorad(camera_yaw-90)) * .5)
+    camera_y = camera_y + -(sin (degtorad(camera_yaw-90)) * .5)
+  end if
+
+  if key_check('W')  then
+    camera_x = camera_x + (cos (degtorad(camera_yaw)) * .5)
+    camera_y = camera_y + -(sin (degtorad(camera_yaw)) * .5)
+  end if
+
+  if key_check('S')  then
+    camera_x = camera_x + (cos (degtorad(camera_yaw-180)) * .5)
+    camera_y = camera_y + -(sin (degtorad(camera_yaw-180)) * .5)
+  end if
+
+  if key_check(VK_END)  then
+    camera_z+=1
+  end if
+
+  if key_check(VK_HOME)  then
+    camera_z-=1
+  end if
+
+     if mouse_button=1 and selected=0 and inv[1][1]>0 then 
+    shooting=1
+    if shoot_time<current_time() then
+      shoot_time=current_time()+rate_of_fire(inv[1][1])
+      shoot()
+      
+      --?get_angle_to(300,300,mousex,mousey)
+    end if
+  end if
+
+  if input_onoff=0 then
+
+  player_update()
+
+  end if
+  
+
+
+      if not(TickCore(deltatime))=1 then
+      --?deltatime
+      if TickCore2(deltatime) then
+
+      end if
+    end if
+
+        
+  euglTimerFunc(30,loop_id,0)
+end procedure
+loop_id = routine_id("loop")
+
+
+
+procedure key(integer keycode,integer mode,integer y)
+ 	if keycode = VK_ESCAPE then
+  	  ewPostQuitMessage(#10)
+          abort(0)
+  	end if
+
+        if mode=0 then
+          keyboard_char=keycode
+          key_add(keycode)
+        else
+         key_remove(keycode)
+        end if
+
+   
+
+
+end procedure
+
+procedure mouse(integer event,integer v1,integer v2,integer v3)
+  if event=EUGL_LEFT_BUTTON and v1=EUGL_DOWN then
+    --puts(1,"left mouse down\n")
+    mouse_button=1
+  elsif event=EUGL_LEFT_BUTTON and v1=EUGL_UP then
+    --puts(1,"left mouse up\n")
+    mouse_button=2
+  end if
+
+end procedure
+
+
+
+procedure motion(integer x,integer y)
+
+  mousex=x
+  mousey=y
+end procedure
+
+
+procedure reshape(integer w,integer h)
+	--gl_viewport(0,0,w,h)
+end procedure
+
+
+-- Tell EuGL to use double-buffering
+euglFlags = PFD_DOUBLEBUFFER	
+
+-- If you want fullscreen, uncomment the next two lines.
+-- euglPFD[EUGL_COLORBITS] = 16
+-- euglDisplayMode = EUGL_FULLSCREEN	
+
+euglDisplayFunc(routine_id("draw"))
+euglInitFunc(routine_id("init"))
+euglReshapeFunc(routine_id("reshape"))
+euglKeyboardFunc(routine_id("key"))
+euglMouseFunc( routine_id("mouse") )
+euglPassiveMotionFunc( routine_id("motion") )
+
+EuGLMain(EUGL_HANDLE_EVENTS, "open world engine", 800+10, 600+30)

@@ -1,0 +1,590 @@
+include get.e
+
+--include "projectile xml.ew"
+sequence xml_list,object_list
+xml_list={}
+object_list=repeat({},65536)
+
+function object_new()
+  return
+  {
+{"type",0},
+{"id",0},
+{"Class",0},
+{"Item",0},
+{"Texture",0},
+{"File",0},
+{"Index",0},
+{"SlotType",0},
+{"Tier",0},
+{"Description",0},
+{"PetFamily",0},
+{"Rarity",0},
+{"Activate",0},
+{"Consumable",0},
+{"BagType",0},
+{"feedPower",0},
+{"DisplayId",0},
+{"Soulbound",0},
+{"RateOfFire",0},
+{"Sound",0},
+{"Projectile",0},
+{"ObjectId",0},
+{"Speed",0},
+{"MinDamage",0},
+{"MaxDamage",0},
+{"LifetimeMS",0},
+{"OldSound",0},
+{"FameBonus",0},
+{"NumProjectiles",0},
+{"ArcGap",0},
+{"MultiHit",0},
+{"Parametric",0},
+{"PassesCover",0},
+{"Size",0},
+{"ConditionEffect",0},
+{"ParticleTrail",0},
+{"ActivateOnEquip",0},
+{"amount",0},
+{"Usable",0},
+{"MpCost",0},
+{"Armor",0},
+{"Potion",0},
+{"Doses",0},
+{"SuccessorId",0},
+{"duration",0},
+{"range",0},
+{"Cooldown",0},
+{"Amplitude",0},
+{"Frequency",0},
+{"totalDamage",0},
+{"condDuration",0},
+{"angleOffset",0},
+{"maxTargets",0},
+{"Resurrects",0},
+{"lockedName",0},
+{"condEffect",0},
+{"effect",0},
+{"checkExistingEffect",0},
+{"color",0},
+{"Timer",0},
+{"XpBoost",0},
+{"ScaleValue",0},
+{"ExtraTooltipData",0},
+{"MpEndCost",0},
+{"MultiPhase",0},
+{"LTBoosted",0},
+{"LDBoosted",0},
+{"Backpack",0},
+{"Treasure",0},
+{"AnimatedTexture",0},
+{"Wavy",0},
+{"Enemy",0},
+{"HitSound",0},
+{"DeathSound",0},
+{"MaxHitPoints",0},
+{"Defense",0},
+{"Terrain",0},
+{"God",0},
+{"SpawnProb",0},
+{"XpMult",0},
+{"Damage",0},
+{"Group",0},
+{"StasisImmune",0},
+{"BloodProb",0},
+{"BloodColor",0},
+{"AltTexture",0},
+{"Level",0},
+{"Quest",0},
+{"Boomerang",0},
+{"Flying",0},
+{"Spawn",0},
+{"Mean",0},
+{"StdDev",0},
+{"Min",0},
+{"Max",0},
+{"Z",0},
+{"ArmorPiercing",0},
+{"PerRealmMax",0},
+{"ProjectileId",0},
+{"ProjectileDamage",0},
+{"Container",0},
+{"CanPutNormalObjects",0},
+{"Loot",0},
+{"SlotTypes",0},
+{"ShowName",0},
+{"CanPutSoulboundObjects",0},
+{"IntergamePortal",0},
+{"SpawnPoint",0},
+{"DungeonName",0},
+{"NoMiniMap",0},
+{"NexusPortal",0},
+{"Friendly",0},
+{"CanUseTexes",0},
+{"Animation",0},
+{"period",0},
+{"Frame",0},
+{"RandomTexture",0},
+{"ShadowSize",0},
+{"LockedPortal",0},
+{"Model",0},
+{"Effect",0},
+{"DrawOnGround",0},
+{"Static",0},
+{"Price",0},
+{"GuildItem",0},
+{"GuildItemParam",0},
+{"OccupySquare",0},
+{"rate",0},
+{"life",0},
+{"lifeVariance",0},
+{"speed",0},
+{"speedVariance",0},
+{"size",0},
+{"rise",0},
+{"riseVariance",0},
+{"rangeX",0},
+{"rangeY",0},
+{"Cube",0},
+{"MinSize",0},
+{"MaxSize",0},
+{"SizeStep",0},
+{"Top",0},
+{"FullOccupy",0},
+{"EnemyOccupySquare",0},
+{"BlocksSight",0},
+{"ProtectFromGroundDamage",0},
+{"ProtectFromSink",0},
+{"BaseIndent",0},
+{"TopIndent",0},
+{"Height",0},
+{"Connects",0},
+{"DotTexture",0},
+{"ShortLineTexture",0},
+{"LTexture",0},
+{"LineTexture",0},
+{"TTexture",0},
+{"CrossTexture",0},
+{"NoWallTextureRepeat",0},
+{"Color",0},
+{"prob",0},
+{"ShadowColor",0},
+{"Rotation",0},
+{"PetYardType",0},
+{"Fame",0},
+{"Sprite",0},
+{}
+}	
+end function
+
+
+function projectile_new()
+  return {
+{"ObjectId",0},
+{"Speed",0},
+{"MinDamage",0},
+{"MaxDamage",0},
+{"LifetimeMS",0},
+{"Parametric",0},
+{"Amplitude",0},
+{"Frequency",0},
+{"Wavy",0},
+{"Boomerang",0},
+{"Size",0}
+  }
+end function
+
+constant objects=object_new()
+
+constant projectiles=projectile_new()
+
+function projectile_index(sequence name)
+  for i=1 to length(projectiles) do
+     if equal(projectiles[i][1],name) then
+       return i	
+     end if
+  end for	
+end function
+
+function object_index(sequence name)
+  for i=1 to length(objects)-1 do
+     if equal(objects[i][1],name) then
+       return i	
+     end if
+  end for	
+end function
+
+global constant object_speed=object_index("Speed")
+global constant object_lifetime=object_index("LifetimeMS")
+global constant object_numprojectiles=object_index("NumProjectiles")
+global constant object_arcgap=object_index("ArcGap")
+global constant object_amplitude=object_index("Amplitude")
+global constant object_frequency=object_index("Frequency")
+global constant object_wavy=object_index("Wavy")
+global constant object_parametric=object_index("Parametric")
+--global constant equip_magnitude=object_index("Magnitude")
+global constant object_slotType=object_index("SlotType")
+global constant object_tier=object_index("Tier")
+global constant object_enemy = object_index("Enemy")
+global constant object_idd = object_index("id")
+global constant object_class = object_index("Class")
+global constant object_slotTypes=object_index("SlotTypes")
+global constant object_OccupySquare=object_index("OccupySquare")
+global constant object_EnemyOccupySquare=object_index("EnemyOccupySquare")
+global constant object_rateoffire=object_index("RateOfFire")
+global constant object_mindamage=object_index("MinDamage")
+global constant object_mpcost=object_index("MpCost")
+global constant object_activate=object_index("Activate")
+
+global constant object_file=object_index("File")
+global constant object_indexx=object_index("Index")
+
+global constant object_sprite=object_index("Sprite")
+
+
+constant object_projectile=length(objects)
+
+global constant object_projectile_speed=projectile_index("Speed")
+global constant object_projectile_lifetime=projectile_index("LifetimeMS")
+global constant object_projectile_amplitude=projectile_index("Amplitude")
+global constant object_projectile_frequency=projectile_index("Frequency")
+global constant object_projectile_wavy=projectile_index("Wavy")
+global constant object_projectile_parametric=projectile_index("Parametric")
+global constant object_projectile_boomerang=projectile_index("Boomerang")
+global constant object_projectile_ObjectId=projectile_index("ObjectId")
+global constant object_projectile_size=projectile_index("Size")
+
+
+
+atom root,att,child, nchild, celement
+sequence ret,name1,attname,name2,name3
+
+integer index,projectile_id
+projectile_id=0
+index=0
+
+integer in_pro
+in_pro=0
+
+procedure process_children(atom node)
+atom nchild,att,celement
+
+
+    
+	nchild=tinyxml_node_firstchild(node)
+	if nchild=0 then
+   	  return
+    end if
+
+    if tinyxml_node_nochildren(nchild)=1 then
+   	  return
+    end if
+
+
+	while nchild!=0 do
+      	name3=tinyxml_node_value(nchild)
+        
+      	
+      	celement=tinyxml_node_toelement(nchild)
+      	
+        if celement!=0 then
+        	
+          att=tinyxml_frist_attribute(celement)
+          if att then
+
+            while att!=0 do
+              attname=tinyxml_attribute_name(att)
+              for i=1 to length(xml_list[index])-1 do
+      	        if equal(xml_list[index][i][1],attname) then
+      	          xml_list[index][i][2]=tinyxml_attribute_value(att)
+      		      exit
+      	        end if
+              end for
+              att=tinyxml_attribute_next(att)
+            end while
+          end if
+
+        end if
+
+        if celement!=0 then
+          ret=tinyxml_element_gettext(celement)
+          if length(ret) then
+
+	      else
+
+          end if
+          
+
+          if equal(name2,"Projectile") then
+            --puts(1,name3&"\n")
+            for i=1 to length(xml_list[index][object_projectile][projectile_id]) do
+              if equal(xml_list[index][object_projectile][projectile_id][i][1],name3) then
+                --puts(1,name3&"\n")
+                xml_list[index][object_projectile][projectile_id][i][2]=ret
+                exit
+              end if
+            end for
+
+          end if
+
+
+          for i=1 to length(xml_list[index])-1 do
+      	      if equal(xml_list[index][i][1],name3) then
+      	        xml_list[index][i][2]=ret
+      	      exit
+      	      end if
+            end for
+        end if
+
+        if tinyxml_node_nochildren(nchild)=0 then
+   	      process_children(nchild)
+        end if
+        nchild=tinyxml_node_IterateChildren(node,nchild)
+      end while
+end procedure
+
+
+procedure process_objects(sequence name)
+  if tinyxml_load_file(doc,"all\\"&name)=1 then
+  root=tinyxml_frist_child_element(doc, "Objects")
+  
+
+
+  att=tinyxml_frist_attribute(root)
+  if att then
+  	
+    puts(1,tinyxml_attribute_name(att)&"  ")
+
+    puts(1,tinyxml_attribute_value(att)&"\n")
+  end if
+
+  child=tinyxml_element_firstchild(root)
+
+  
+
+  while child!=0 do
+
+    name1=tinyxml_node_value(child)
+    if equal(name1,"Object") then
+      xml_list=append(xml_list, object_new() )
+      index=length(xml_list)
+    end if
+
+  	
+    att=tinyxml_frist_attribute(child)
+
+    if att then
+
+      while att!=0 do
+        attname=tinyxml_attribute_name(att)
+        for i=1 to length(xml_list[index])-1 do
+      	  if equal(xml_list[index][i][1],attname) then
+      	    xml_list[index][i][2]=tinyxml_attribute_value(att)
+      		exit
+      	  end if
+        end for
+        att=tinyxml_attribute_next(att)
+        
+      end while
+
+    end if
+
+
+    nchild=tinyxml_node_firstchild(child)
+    	
+      while nchild!=0 do
+      	name2=tinyxml_node_value(nchild)
+
+        
+
+        if equal(name2,"Projectile") then
+          
+          xml_list[index][object_projectile]=append(xml_list[index][object_projectile],projectile_new())
+          projectile_id=length(xml_list[index][object_projectile])
+        end if
+      	
+        celement=tinyxml_node_toelement(nchild)
+
+        if celement!=0 then
+        	
+
+          att=tinyxml_frist_attribute(celement)
+
+          if att then
+
+            while att!=0 do
+              attname=tinyxml_attribute_name(att)
+              for i=1 to length(xml_list[index])-1 do
+      	        if equal(xml_list[index][i][1],attname) then
+      	         xml_list[index][i][2]=tinyxml_attribute_value(att)
+      		     exit
+      	       end if
+              end for
+              att=tinyxml_attribute_next(att)
+
+            end while
+          end if
+
+        end if
+
+        if celement!=0 then
+          ret=tinyxml_element_gettext(celement)
+          if length(ret) then
+	      else
+          end if
+            for i=1 to length(xml_list[index])-1 do
+      	      if equal(xml_list[index][i][1],name2) then
+      	        xml_list[index][i][2]=ret
+      		    exit
+      	      end if
+            end for
+
+         
+        end if
+
+        process_children(nchild)
+
+        nchild=tinyxml_node_IterateChildren(child,nchild)
+      end while
+      child=tinyxml_node_IterateChildren(root,child)
+  end while	
+end if	
+end procedure
+
+
+sequence list
+list=dir("all\\")
+
+for i=3 to length(list) do
+  --puts(1,list[i][D_NAME]&"\n")
+  process_objects( list[i][D_NAME] )
+  --sleep(1)
+end for
+
+
+integer ind
+
+for j=1 to length(xml_list) do
+  ind=str_tol(xml_list[j][1][2])
+  if length(object_list[ind])!=0 then
+  	puts(1,"error occored\n")
+  	?ind
+  end if
+
+  object_list[ ind ]=xml_list[j]
+
+  --puts(1, sprint ( str_tol(xml_list[j][1][2]) ) &"\n")	
+end for
+
+global function object_delta( integer index, integer id )
+  
+  if length(object_list[ index ])=0 then
+  	return -2
+  end if
+  if integer(object_list[ index ][id][2]) then
+  	return -1
+  end if	
+
+  --if length(object_list[ index ][id][2])=0 then
+  --	return -1
+  --else
+    return object_list[ index ][id][2]
+  --end if
+
+end function
+
+
+global function object_delta_mod( integer index, integer id )
+  
+    return object_list[ index ][id][2]
+
+end function
+
+
+global function object_projectile_delta( integer index, integer bullettype ,integer id )
+  if length(object_list[ index ]) =0 then
+     return -1
+  end if
+  if integer(object_list[ index ][object_projectile][bullettype][id][2]) then
+    return -1
+  end if
+
+  return object_list[ index ][object_projectile][bullettype][id][2]
+end function
+
+
+procedure object_bulletid_settype()
+integer id
+  for i=1 to length(object_list) do
+    if length(object_list[i]) then
+    if length(object_list[ i][object_projectile]) then
+    if sequence(object_projectile_delta(i,1,object_projectile_ObjectId)) then
+     
+     id= projectile_type_from_name(object_projectile_delta(i,1,object_projectile_ObjectId))
+     object_list[ i ][object_projectile][1][object_projectile_ObjectId][2]=sprint(id)
+     
+    end if
+    end if
+    end if
+  end for
+ 
+end procedure
+object_bulletid_settype()
+
+global function object_type_from_name(sequence name)
+  for i=1 to length(object_list) do
+    if sequence(object_delta(i,object_idd)) then
+      if equal(lower(object_delta(i,object_idd)),lower(name)) then
+        return i
+      end if
+    end if
+  end for
+  puts(1,"not found "&name&"\n")
+  return -1
+end function
+
+
+
+global procedure object_set_sprite(sequence data)
+
+  for i=1 to length(object_list) do
+    if length(object_list[i]) then
+      if sequence(object_list[ i ][object_indexx][2]) then
+      object_list[ i ][object_indexx][2]=str_tol(object_list[ i ][object_indexx][2])
+      end if
+
+      for j=1 to length(data) do
+        if equal(data[j][1],object_delta_mod(i,object_file)) then
+          object_list[ i ][object_sprite][2]=data[j][2]
+          exit
+    	end if
+      end for
+    end if
+
+  end for
+ 
+end procedure
+
+
+sequence file_list
+file_list={}
+
+procedure file_enter(sequence name)
+  for i=1 to length(file_list) do
+    if equal(file_list[i],name ) then
+      return
+    end if
+  end for
+
+  file_list=append(file_list,name)
+  puts(1,name&"\n")
+end procedure
+
+--for i=1 to length(object_list) do
+--  if length(object_list[i]) then
+    --puts(1,ground_delta(i,ground_file)&"\n")
+--    if sequence(object_delta(i,object_file)) then
+    --file_enter(object_delta(i,object_file))
+--    end if
+--  end if
+--end for

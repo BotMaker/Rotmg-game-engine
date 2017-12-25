@@ -1,0 +1,849 @@
+include eugl.ew
+include texture.ew
+include spritesheet.ew
+include font.ew
+include extra.ew
+
+integer current_texture
+current_texture=0
+integer count
+count=0
+
+integer red,green,blue
+
+red=255
+green=255
+blue=255
+
+integer fieldofview
+sequence view_wview,view_hview
+integer view_current
+view_wview={800.0}
+view_hview={600}
+view_current=1
+fieldofview=45--values from rotmg
+
+atom projection_matrix,transformation_matrix
+projection_matrix=allocate(8*16)
+transformation_matrix=allocate(8*16)
+
+atom transformation_matrix_defalut
+transformation_matrix_defalut=allocate(8*16)
+
+global procedure d3d_bind_texture(integer tex)
+  if current_texture!=tex then
+    gl_bindTexture (GL_TEXTURE_2D, tex)
+    current_texture=tex
+  end if
+end procedure 
+
+global procedure d3d_set_hidden(integer enable)
+if enable then
+  gl_enable(GL_DEPTH_TEST)
+else
+  gl_disable(GL_DEPTH_TEST)
+end if
+end procedure 
+
+global function d3d_get_count()
+  return count
+end function
+
+global procedure d3d_set_count(integer c)
+  count=c
+end procedure
+
+global procedure draw_set_color(integer r, integer g, integer b)
+  red=r
+  green=g
+  blue=b
+end procedure 
+
+
+
+global procedure draw_text(atom x, atom y, sequence text)
+integer sprite_width,sprite_height,images_per_row,frameindex,spr,fw
+atom tx,ty,tw,th,aw
+
+spr=font_list[currentfont][1]
+
+sprite_width=font_list[currentfont][2]
+sprite_height=font_list[currentfont][3]
+
+tw =  spritesheet_list[spr][6]
+th = spritesheet_list[spr][7]
+
+images_per_row= spritesheet_list[spr][8]
+
+d3d_bind_texture(spritesheet_list[spr][1])
+
+gl_color4ub(red,green,blue,255)
+
+for i=1 to length(text) do
+
+  frameindex=text[i]-32
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+   fw=font_list[currentfont][4][text[i]-31]+1
+
+   aw=(tw/sprite_width)*fw
+   count+=1
+
+    gl_begin (GL_QUADS)
+
+      gl_texCoord2f ( {tx, ty}) gl_vertex2f({ x, y })
+      gl_texCoord2f ( {tx+aw, ty}) gl_vertex2f({ x+fw, y })
+      gl_texCoord2f ( {tx+aw, ty+th}) gl_vertex2f({ x+fw, y+sprite_height })
+      gl_texCoord2f ( {tx, ty+th}) gl_vertex2f({ x, y+sprite_height })
+
+    gl_end ()
+
+ x+=fw
+ 
+end for
+gl_color4ub(255,255,255,255)
+end procedure
+
+
+
+global procedure draw_texture(atom x, atom y, integer tex)
+  integer width,height
+
+  width=texture_list[tex][texture_width]
+  height=texture_list[tex][texture_height]
+
+  d3d_bind_texture(tex)
+
+  count+=1
+  gl_begin (GL_QUADS)
+
+  gl_texCoord2f ( {0, 0}) gl_vertex2f({ x, y })
+  gl_texCoord2f ( {1, 0}) gl_vertex2f({ x+width, y })
+  gl_texCoord2f ( {1, 1}) gl_vertex2f({ x+width, y+height })
+  gl_texCoord2f ( {0, 1}) gl_vertex2f({ x, y+height })
+
+  gl_end ()
+end procedure
+
+global procedure draw_spritesheet_texture(atom x, atom y, integer spr, integer frameindex)
+integer width,height
+integer images_per_row
+atom tx,ty,tw,th
+
+  width=spritesheet_list[spr][spritesheet_sprite_width]
+  height=spritesheet_list[spr][spritesheet_sprite_height]
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+  gl_begin (GL_QUADS)
+
+  gl_texCoord2f ( {tx, ty}) gl_vertex2f({ x, y })
+  gl_texCoord2f ( {tx+tw, ty}) gl_vertex2f({ x+width, y })
+  gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex2f({ x+width, y+height })
+  gl_texCoord2f ( {tx, ty+th}) gl_vertex2f({ x, y+height })
+
+  gl_end ()
+end procedure
+
+global procedure draw_spritesheet_texture_ext(atom x, atom y, integer spr, integer frameindex, integer xs, integer ys )
+--integer width,height
+integer images_per_row
+atom tx,ty,tw,th
+
+  --width=spritesheet_list[spr][spritesheet_sprite_width]
+  --height=spritesheet_list[spr][spritesheet_sprite_height]
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+  gl_begin (GL_QUADS)
+
+  gl_texCoord2f ( {tx, ty}) gl_vertex2f({ x, y })
+  gl_texCoord2f ( {tx+tw, ty}) gl_vertex2f({ x+xs, y })
+  gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex2f({ x+xs, y+ys })
+  gl_texCoord2f ( {tx, ty+th}) gl_vertex2f({ x, y+ys })
+
+  gl_end ()
+end procedure
+
+global procedure draw_line(atom x1,atom y1,atom x2,atom y2)
+
+  d3d_bind_texture(0)--unbindtexture
+
+  gl_begin(GL_LINES)
+    gl_color4ub(red,green,blue,255)
+    gl_vertex2f({x1,y1})
+    gl_color4ub(red,green,blue,255)
+    gl_vertex2f({x2,y2})
+  gl_end()
+
+
+ gl_color4ub(255,255,255,255)
+end procedure
+
+global procedure draw_rectangle(atom x1,atom y1,atom x2,atom y2,integer outline)
+  d3d_bind_texture(0)--unbindtexture
+  if(outline) then
+    gl_color4ub(red,green,blue,255)
+    gl_begin(GL_LINE_LOOP)
+      gl_vertex2f({x1,y1})
+      gl_vertex2f({x1,y2})
+      gl_vertex2f({x2,y2})
+      gl_vertex2f({x2,y1})
+    gl_end()
+  else 
+    gl_color4ub(red,green,blue,255)
+    gl_rectf({x1,y1,x2,y2})
+  end if
+   gl_color4ub(255,255,255,255)
+end procedure
+
+
+global procedure  d3d_set_projection_ortho(atom x, atom y, atom width, atom height, atom angle)
+  gl_disable(GL_DEPTH_TEST)
+  gl_matrixMode(GL_PROJECTION)
+  gl_loadIdentity()
+  glu_perspective(angle, 1, 0, 1)
+  gl_matrixMode(GL_MODELVIEW)
+  gl_loadIdentity()
+  gl_scalef({1, -1, 1})
+  gl_ortho(x-1,x + width,y-1,y + height,0,1)
+  gl_rotatef(angle,{0,0,1})
+  gl_getDoublev(GL_MODELVIEW_MATRIX,projection_matrix)
+  gl_multMatrixd(transformation_matrix)
+end procedure 
+
+
+global procedure d3d_start()
+
+  -- Enable depth buffering
+  gl_enable(GL_DEPTH_TEST)
+
+  -- Set up projection matrix
+  gl_matrixMode(GL_PROJECTION)
+  gl_loadIdentity()
+  glu_perspective(fieldofview, -view_wview[view_current] / view_hview[view_current], 1, 32000) -- view_hview might need converting to double
+
+  -- Set up modelview matrix
+  gl_matrixMode(GL_MODELVIEW)
+  gl_clearColor(0,0,0,1)
+  gl_clear(GL_COLOR_BUFFER_BIT + GL_DEPTH_BUFFER_BIT)--might need to or_all instead
+  gl_loadIdentity()
+
+end procedure 
+
+global procedure d3d_set_perspective(integer enable)
+
+  if (enable) then
+    gl_matrixMode(GL_PROJECTION)
+    gl_loadIdentity()
+    glu_perspective(fieldofview, -view_wview[view_current] / view_hview[view_current], 1, 32000) -- view_hview might need converting to double
+    gl_matrixMode(GL_MODELVIEW)
+  else
+    gl_matrixMode(GL_PROJECTION)
+    gl_loadIdentity()
+    glu_perspective(0, 1, 0, 1)
+    gl_matrixMode(GL_MODELVIEW)
+  end if --Perspective not the same as in GM when turning off perspective and using d3d projection
+end procedure 
+
+
+procedure projection_matrix_set(sequence list)
+sequence bytes
+integer pos
+  pos=0
+  for i=1 to 16 do --should be 16
+    bytes=atom_to_float64(list[i])
+    for j=1 to 8 do
+      poke(projection_matrix+pos, bytes[j])
+      pos+=1
+    end for
+  end for
+end procedure
+
+procedure transformation_matrix_set(sequence list)
+sequence bytes
+integer pos
+  pos=0
+  for i=1 to 16 do --should be 16
+    bytes=atom_to_float64(list[i])
+    for j=1 to 8 do
+      poke(transformation_matrix+pos, bytes[j])
+      pos+=1
+    end for
+  end for
+end procedure
+
+projection_matrix_set({1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1})
+
+transformation_matrix_set({1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1})
+mem_copy(transformation_matrix_defalut, transformation_matrix, 8*16)
+
+
+
+global procedure d3d_set_projection(atom xfrom,atom yfrom,atom zfrom,atom xto,atom yto,atom zto,atom xup,atom yup,atom zup)
+
+  gl_matrixMode(GL_PROJECTION)
+  gl_loadIdentity()
+  glu_perspective(fieldofview, -view_wview[view_current] / view_hview[view_current], 1, 32000) -- view_hview might need converting to double
+  gl_matrixMode(GL_MODELVIEW)
+  gl_loadIdentity()
+  glu_lookAt( {xfrom, yfrom, zfrom}, {xto, yto, zto}, {xup, yup, zup})
+
+  gl_getDoublev(GL_MODELVIEW_MATRIX,projection_matrix)
+  gl_multMatrixd(transformation_matrix)
+end procedure 
+
+
+global procedure d3d_set_projection_ext(atom xfrom,atom yfrom,atom zfrom,atom xto,atom yto,atom zto,atom xup,atom yup,atom zup,atom angle,atom aspect,atom znear,atom zfar)
+  
+
+  gl_matrixMode(GL_PROJECTION)
+  gl_loadIdentity()
+  glu_perspective(angle, -aspect, znear, zfar)
+  gl_matrixMode(GL_MODELVIEW)
+  gl_loadIdentity()
+ 
+  glu_lookAt({xfrom, yfrom, zfrom}, {xto, yto, zto}, {xup, yup, zup})
+  gl_getDoublev(GL_MODELVIEW_MATRIX,projection_matrix)
+  gl_multMatrixd(transformation_matrix)
+end procedure
+
+
+global procedure d3d_transform_set_identity()
+  mem_copy( transformation_matrix,transformation_matrix_defalut, 8*16) 
+  gl_multMatrixd(transformation_matrix)
+end procedure
+
+global procedure d3d_transform_add_translation(atom xt,atom yt,atom zt)
+
+  gl_loadIdentity()
+  gl_translatef({xt, yt, zt})
+  gl_multMatrixd(transformation_matrix)
+  gl_getDoublev(GL_MODELVIEW_MATRIX,transformation_matrix)
+  gl_loadMatrixd(projection_matrix)
+  gl_multMatrixd(transformation_matrix)
+end procedure
+
+global procedure d3d_transform_set_translation(atom xt,atom yt,atom zt)
+
+  gl_loadIdentity()
+  gl_translatef({xt, yt, zt})
+  gl_getDoublev(GL_MODELVIEW_MATRIX,transformation_matrix)
+  gl_loadMatrixd(projection_matrix)
+  gl_multMatrixd(transformation_matrix)
+end procedure
+
+global procedure d3d_transform_add_rotation_axis(atom x, atom y, atom z, atom angle)
+
+  gl_loadIdentity()
+  gl_rotatef(-angle,{x,y,z})
+  gl_multMatrixd(transformation_matrix)
+  gl_getDoublev(GL_MODELVIEW_MATRIX,transformation_matrix)
+  gl_loadMatrixd(projection_matrix)
+  gl_multMatrixd(transformation_matrix)
+end procedure
+
+
+
+global procedure draw_spritesheet_floor2(atom xx, atom yy, atom size, integer spr,integer frameindex)
+atom tx,ty,tw,th
+integer images_per_row
+ atom v
+ v=0
+d3d_transform_set_identity()
+
+ 
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+ 
+ d3d_transform_set_translation(-(size/2), -(size/2), 0)
+ --d3d_transform_add_rotation_axis(0, 0, 1, angle)
+ d3d_transform_add_translation(xx, yy, 0)
+
+  
+ tx=wrap_between(frameindex,0,images_per_row)*tw
+ ty=floor(frameindex/images_per_row)*th
+
+ d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ 0, 0, 0.5+v })
+ gl_texCoord2f ( {tx, ty}) gl_vertex3f({ size, 0, 0.5+v })
+ gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ size, size, 0.5+v })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 0, size, 0.5+v })
+
+ gl_end ()
+
+ d3d_transform_set_identity()
+end procedure
+
+
+global procedure draw_spritesheet_floor(atom xx, atom yy, atom size, integer spr,integer frameindex)
+atom tx,ty,tw,th
+integer images_per_row
+ atom v
+ v=0
+d3d_transform_set_identity()
+
+ 
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+ 
+ d3d_transform_set_translation(-(size/2), -(size/2), 0)
+ --d3d_transform_add_rotation_axis(0, 0, 1, angle)
+ d3d_transform_add_translation(xx, yy, 0)
+
+  
+ tx=wrap_between(frameindex,0,images_per_row)*tw
+ ty=floor(frameindex/images_per_row)*th
+
+ d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx, ty}) gl_vertex3f({ 0, 0, 0.5+v })
+ gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ size, 0, 0.5+v })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ size, size, 0.5+v })
+ gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ 0, size, 0.5+v })
+
+ gl_end ()
+
+ d3d_transform_set_identity()
+end procedure
+
+
+global procedure draw_spritesheet_floor_angle(atom xx, atom yy, atom size, integer spr,integer frameindex, atom angle)
+atom tx,ty,tw,th
+integer images_per_row
+ atom v
+ v=0
+d3d_transform_set_identity()
+
+ 
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+ 
+ d3d_transform_set_translation(-(size/2), -(size/2), 0)
+ d3d_transform_add_rotation_axis(0, 0, 1, angle)
+ d3d_transform_add_translation(xx, yy, 0)
+
+  
+ tx=wrap_between(frameindex,0,images_per_row)*tw
+ ty=floor(frameindex/images_per_row)*th
+
+ d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+ count+=1
+
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx, ty}) gl_vertex3f({ 0, 0, 0.5+v })
+ gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ size, 0, 0.5+v })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ size, size, 0.5+v })
+ gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ 0, size, 0.5+v })
+
+ gl_end ()
+
+ d3d_transform_set_identity()
+end procedure
+
+
+global procedure draw_texturesheet_wall(atom xx, atom yy, atom size, integer tex,integer frameindex, atom v)
+integer sprite_width,sprite_height,images_per_row,z
+atom tx,ty,tw,th
+
+
+sprite_width=8
+sprite_height=8
+
+tw = (sprite_width / 128)
+th = (sprite_height / 240)
+
+
+images_per_row= 128/sprite_width
+d3d_transform_set_identity()
+ 
+ d3d_transform_set_translation(-(size/2), -(size/2), 0)
+ --d3d_transform_add_rotation_axis(0, 0, 1, angle)
+ d3d_transform_add_translation(xx, yy, 0)
+
+  
+ tx=wrap_between(160,0,images_per_row)*tw
+ ty=floor(160/images_per_row)*th
+
+ gl_bindTexture (GL_TEXTURE_2D, tex)
+
+ z=2
+
+
+
+
+  --front
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx, ty})       gl_vertex3f({ 0, 1, 0 })
+ gl_texCoord2f ( {tx+tw, ty})    gl_vertex3f({ 0, 1, z })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 1, 1, z })
+ gl_texCoord2f ( {tx, ty+th})    gl_vertex3f({ 1, 1, 0 })
+
+ gl_end ()
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+ ty=floor(frameindex/images_per_row)*th
+
+
+  --BACK
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx, ty})       gl_vertex3f({ 0, 0, 0 })
+ gl_texCoord2f ( {tx+tw, ty})    gl_vertex3f({ 0, 0, z })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 1, 0, z })
+ gl_texCoord2f ( {tx, ty+th})    gl_vertex3f({ 1, 0, 0 })
+
+ gl_end ()
+
+ --left size
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx, ty})       gl_vertex3f({ 0, 1, 0 })
+ gl_texCoord2f ( {tx+tw, ty})    gl_vertex3f({ 0, 0, 0 })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 0, 0, z })
+ gl_texCoord2f ( {tx, ty+th})    gl_vertex3f({ 0, 1, z })
+
+ gl_end ()
+
+  --right size
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx, ty})       gl_vertex3f({ 1, 1, 0 })
+ gl_texCoord2f ( {tx+tw, ty})    gl_vertex3f({ 1, 0, 0 })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 1, 0, z })
+ gl_texCoord2f ( {tx, ty+th})    gl_vertex3f({ 1, 1, z })
+
+ gl_end ()
+
+ 
+ --top
+ gl_begin (GL_TRIANGLE_FAN)
+
+ gl_texCoord2f ( {tx, ty})       gl_vertex3f({ 0, 1, z })
+ gl_texCoord2f ( {tx+tw, ty})    gl_vertex3f({ 1, 1, z })
+ gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 1, 0, z })
+ gl_texCoord2f ( {tx, ty+th})    gl_vertex3f({ 0, 0, z })
+
+ gl_end ()
+
+
+
+ d3d_transform_set_identity()
+end procedure
+
+
+
+
+global procedure d3d_draw_text(atom x, atom y, sequence text)
+integer sprite_width,sprite_height,images_per_row,frameindex,spr,fw
+atom tx,ty,tw,th,aw
+
+d3d_transform_set_identity()
+
+ d3d_transform_set_translation(-(1/2), -(1/2), 0)
+ d3d_transform_add_translation(x, y, 0)
+
+spr=font_list[currentfont][1]
+
+sprite_width=font_list[currentfont][2]
+sprite_height=font_list[currentfont][3]
+
+tw =  spritesheet_list[spr][6]
+th = spritesheet_list[spr][7]
+
+images_per_row= spritesheet_list[spr][8]
+
+d3d_bind_texture(spritesheet_list[spr][1])
+
+gl_color4ub(red,green,blue,255)
+
+x=0
+for i=1 to length(text) do
+
+  frameindex=text[i]-32
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+   fw=font_list[currentfont][4][text[i]-31]+1
+
+   aw=(tw/sprite_width)*fw
+   count+=1
+
+    gl_begin (GL_QUADS)
+
+      gl_texCoord2f ( {tx, ty})       gl_vertex3f({ x, 0, 1 })
+      gl_texCoord2f ( {tx+aw, ty})    gl_vertex3f({ x+0.2, 0 , 1})
+      gl_texCoord2f ( {tx+aw, ty+th}) gl_vertex3f({ x+0.2, 0.5, 1 })
+      gl_texCoord2f ( {tx, ty+th})    gl_vertex3f({ x, 0.5, 1 })
+
+    gl_end ()
+
+ x+=0.2
+ 
+end for
+gl_color4ub(255,255,255,255)
+d3d_transform_set_identity()
+end procedure
+
+
+
+global procedure draw_spritesheet_tile(atom x, atom y, integer spr, integer frameindex)
+integer images_per_row
+atom tx,ty,tw,th
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+  gl_begin (GL_TRIANGLE_FAN)
+
+  gl_texCoord2f ( {tx, ty}) gl_vertex3f({ x, y, 0 })
+  gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ x+1, y, 0 })
+  gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ x+1, y+1, 0 })
+  gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ x, y+1, 0 })
+
+  gl_end ()
+
+end procedure
+
+
+global procedure draw_spritesheet_tile3(atom x, atom y, integer spr, integer frameindex)
+integer images_per_row
+atom tx,ty,tw,th
+
+d3d_transform_set_identity()
+ 
+ d3d_transform_set_translation(-(1/2), -(1/2), 0)
+ 
+ d3d_transform_add_translation(x, y, 0)
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+
+  gl_begin (GL_TRIANGLE_FAN)
+
+  gl_texCoord2f ( {tx, ty}) gl_vertex3f({ 0, 0, 0.1 })
+  gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ 1, 0, 0.1 })
+  gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 1, 1, 0.1 })
+  gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ 0, 1, 0.1 })
+
+  gl_end ()
+
+  d3d_transform_set_identity()
+
+end procedure
+
+
+global procedure draw_spritesheet_tile5(atom x, atom y, integer spr, integer frameindex)
+integer images_per_row
+atom tx,ty,tw,th
+
+d3d_transform_set_identity()
+ 
+ d3d_transform_set_translation(-(1/2), -(1/2), 0)
+ 
+ d3d_transform_add_translation(x, y, 0)
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+  gl_begin (GL_TRIANGLE_FAN)
+
+  gl_texCoord2f ( {tx, ty}) gl_vertex3f({ 0, 0, 0.1 })
+  gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ 1, 0, 0.1 })
+  gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ 1, 1, 0.1 })
+  gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ 0, 1, 0.1 })
+
+  gl_end ()
+
+  d3d_transform_set_identity()
+end procedure
+
+
+global procedure draw_spritesheet_tile2(atom x, atom y, integer spr, integer frameindex, atom v)
+integer images_per_row
+atom tx,ty,tw,th,offsetx,offsety
+
+  offsetx=0--(1/2)/2
+  offsety=0--(1/2)/2
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+  gl_begin (GL_TRIANGLE_FAN)
+
+  gl_texCoord2f ( {tx, ty}) gl_vertex3f({ x-offsetx, y-offsety, 0.1+v })
+  gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ (x+1)-offsetx, y-offsety, 0.1+v })
+  gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ (x+1)-offsetx, (y+1)-offsety, 0.1+v })
+  gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ x-offsetx, (y+1)-offsety, 0.1+v })
+
+  gl_end ()
+
+
+end procedure
+
+
+global procedure draw_spritesheet_tile6(atom x, atom y, atom size, integer spr, integer frameindex, atom v)
+integer images_per_row,width
+atom tx,ty,tw,th,offsetx,offsety
+
+
+  width=spritesheet_list[spr][spritesheet_sprite_width]
+  if width=16 then
+    size*=2
+    
+  end if
+
+  offsetx=(size/2)/2
+  offsety=(size/2)/2
+
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+  gl_begin (GL_TRIANGLE_FAN)
+
+  gl_texCoord2f ( {tx, ty}) gl_vertex3f({ x-offsetx, y-offsety, 0.1+1 })
+  gl_texCoord2f ( {tx+tw, ty}) gl_vertex3f({ (x+size)-offsetx, y-offsety, 0.1+1 })
+  gl_texCoord2f ( {tx+tw, ty+th}) gl_vertex3f({ (x+size)-offsetx, (y+size)-offsety, 0.1+0 })
+  gl_texCoord2f ( {tx, ty+th}) gl_vertex3f({ x-offsetx, (y+size)-offsety, 0.1+0 })
+
+  gl_end ()
+
+
+end procedure
+
+integer xpixel,ypixel
+ xpixel=24
+ ypixel=24
+
+global procedure draw_spritesheet_tile4(atom x, atom y, atom size, integer spr, integer frameindex)
+integer images_per_row
+atom tx,ty,tw,th
+
+
+d3d_transform_set_identity()
+ 
+ d3d_transform_set_translation(-(1/2), -(1/2), 0)
+ 
+ d3d_transform_add_translation(x, y, 0)
+
+
+  tw = spritesheet_list[spr][spritesheet_texture_tw]
+  th = spritesheet_list[spr][spritesheet_texture_th]
+
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0,images_per_row)*tw
+  ty=floor((frameindex/images_per_row))*th
+
+  d3d_bind_texture(spritesheet_list[spr][spritesheet_texture])
+
+  count+=1
+
+  gl_begin (GL_TRIANGLE_FAN)
+
+  gl_texCoord2f ( {tx, ty})      gl_vertex3f({ 0,    0,    0.1 })
+  gl_texCoord2f ( {tx+tw, ty})   gl_vertex3f({ size, 0,    0.1 })
+  gl_texCoord2f ( {tx+tw, ty+th})gl_vertex3f({ size, size, 0.1 })
+  gl_texCoord2f ( {tx, ty+th})   gl_vertex3f({ 0,    size, 0.1 })
+
+  gl_end ()
+
+d3d_transform_set_identity()
+
+end procedure
+

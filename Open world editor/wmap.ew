@@ -1,0 +1,269 @@
+include zlib.e
+include misc.e
+without warning
+
+include input_stream.ew
+
+integer input
+input=input_stream_new()
+
+include tinyxml.ew
+global atom doc
+doc= tinyxml_document()
+include "xml all.ew"
+
+global integer map_width,map_height
+map_width=0
+map_height=0
+
+global sequence mapdata,objectdata,sizedata
+mapdata={}
+objectdata={}
+sizedata={}
+
+
+integer comprLen, uncomprLen
+atom compr, uncompr
+comprLen = 1024*1024*20 --max map size in bytes width and height 
+uncomprLen = comprLen
+
+
+procedure CHECK_ERR(integer err, sequence msg)
+    if err != Z_OK then
+        printf(2, "%s Error: %d\n", {msg, err})
+		machine_proc(26, 0)
+        abort(1)
+    end if
+end procedure
+
+procedure test_deflate(sequence data,atom compr, integer comprLen)
+	z_streamp c_stream -- compression stream
+	integer err, len
+	atom lphello
+
+	lphello = allocate_string(data)
+	len = length(data) + 1
+
+	c_stream = z_stream(0)
+	-- Pointless, really, because it is already set to null...
+	poke4(c_stream + Zalloc, 0)
+	poke4(c_stream + Zfree, 0)
+	poke4(c_stream + Zopaque, 0)
+
+	err = deflateInit(c_stream, Z_DEFAULT_COMPRESSION)
+	CHECK_ERR(err, "deflateInit")
+
+	poke4(c_stream + Znext_in, lphello)
+	poke4(c_stream + Znext_out, compr)
+
+	while (peek4u(c_stream + Ztotal_in) != len) and
+			(peek4u(c_stream + Ztotal_out) < comprLen) do
+		-- Force Small Buffers
+		poke4(c_stream + Zavail_in, 1)
+		poke4(c_stream + Zavail_out, 1)
+		err = deflate(c_stream, Z_NO_FLUSH)
+		CHECK_ERR(err, "deflate")
+	end while
+	-- Finish the stream, still forcing small buffers:
+	while 1 do
+		poke4(c_stream + Zavail_out, 1)
+		err = deflate(c_stream, Z_FINISH)
+		if err = Z_STREAM_END then
+			exit
+		end if
+		CHECK_ERR(err, "deflate")
+	end while
+
+	err = deflateEnd(c_stream)
+	CHECK_ERR(err, "deflateEnd")
+	free(lphello)
+end procedure
+
+procedure test_inflate(atom compr, integer comprLen)
+	integer err, len
+	z_streamp d_stream -- decompression stream
+	d_stream = z_stream(0)
+
+	poke(uncompr, "garbage" & 0)
+
+	poke4(d_stream + Zalloc, 0)
+	poke4(d_stream + Zfree, 0)
+	poke4(d_stream + Zopaque, 0)
+
+	poke4(d_stream + Znext_in, compr)
+	poke4(d_stream + Zavail_in, 0)
+	poke4(d_stream + Znext_out, uncompr)
+
+	err = inflateInit(d_stream)
+	CHECK_ERR(err, "inflateInit")
+
+    len = 0
+    while (peek4u(d_stream + Ztotal_out) < uncomprLen) and (peek4u(d_stream + Ztotal_in) < comprLen) do
+		-- Force Small Buffers
+		poke4(d_stream + Zavail_in, 1)
+		poke4(d_stream + Zavail_out, 1)
+        err = inflate(d_stream, Z_NO_FLUSH)
+		if err = Z_STREAM_END then
+			exit
+		end if
+		CHECK_ERR(err, "inflate")
+           len+=1
+       
+	end while
+
+	err = inflateEnd(d_stream)
+	CHECK_ERR(err, "inflateEnd")
+
+	
+        uncomprLen=len
+
+end procedure
+
+
+
+
+function read_string()
+integer char,size
+sequence text
+  text={}
+  size=input_stream_readbyte(input)
+  --?size
+  for i=1 to size  do
+    char=input_stream_readbyte(input)
+    
+    text&=char
+  end for
+return text
+end function
+
+function real(sequence string)
+sequence temp
+temp=value(string)
+return temp[2]
+end function
+
+function parser_size(sequence data)
+integer pos
+sequence temp
+temp={}
+
+  pos=match("size:",lower(data))
+
+  
+  if pos!=0 then
+    for i=pos+5 to length(data) do
+
+      if data[i]>='0' and data[i]<='9' then
+        temp&=data[i]
+      else
+       exit
+      end if
+    end for
+    
+    
+    return real(temp)
+  end if
+
+  return 0
+end function
+
+
+global procedure wmap_load(sequence fname)
+  integer fn, char,pos
+  sequence list,name,obj
+  integer size
+  integer count,t,width,height,terrain,region,obj_type
+  sequence data
+  integer v
+  pos=0
+  data={}
+  list={}
+
+  compr = allocate(comprLen)
+  uncompr = allocate(uncomprLen)
+  mem_set(compr, 0, comprLen)
+  mem_set(uncompr, 0, uncomprLen)
+
+  fn=open(fname,"rb")
+
+  while 1 do
+  char=getc(fn)
+    if char=-1 then
+      exit
+    end if
+    data&=char
+    poke(compr+pos,char)
+    pos+=1
+  end while
+
+
+  close(fn)
+
+  test_inflate(compr, comprLen)
+
+
+  data=peek({uncompr,uncomprLen})
+  input_stream_set(input,data)
+
+  free(compr)
+  free(uncompr)
+
+  --map loading 
+  count=input_stream_readshort(input)
+  puts(1,"count\n")
+  ?count 
+
+  for i=0 to count-1 do
+  
+    t=input_stream_readshort(input)
+    obj=read_string()
+
+    obj_type=object_type_from_name(obj)
+
+  
+    name=read_string()
+  
+    size=parser_size(name)
+    terrain=input_stream_readbyte(input)
+  
+    region=input_stream_readbyte(input)
+
+    list=append(list,{t,obj_type,size})
+  end for
+
+  width=input_stream_readint(input)
+  height=input_stream_readint(input)
+
+  puts(1,"width: "&sprint(width)&" height: "&sprint(height)&"\n")
+  --?width
+  --?height
+
+  map_width=width
+  map_height=height
+
+  mapdata={}
+  objectdata={}
+  sizedata={}
+
+  for y=1 to map_height do
+    mapdata=append(mapdata,repeat(0,map_width))
+    objectdata=append(objectdata,repeat(0,map_width))
+    sizedata=append(sizedata,repeat(0,map_width))
+  end for
+
+  for y=0 to height-1 do
+    for x=0 to width-1 do
+      v=input_stream_readshort(input)
+      mapdata[y+1][x+1]=list[v+1][1]
+      objectdata[y+1][x+1]=list[v+1][2]
+      sizedata[y+1][x+1]=list[v+1][3]
+    end for
+  end for
+  
+end procedure 
+
+
+
+
+
+--sleep(99)

@@ -1,0 +1,623 @@
+--		-= EuGL - An OpenGL interface for Euphoria 2.1+ =-
+--				   By Mic, 2000/2003
+--
+--				    version 031022	
+
+
+include machine.e
+include dll.e
+include get.e
+include msgbox.e
+include ewin32api.ew 
+include gl.ew
+include glu.ew
+include glaux.ew
+
+
+global constant
+	EUGL_COLORBITS	= 5,
+	EUGL_ICON	= 7,
+	EUGL_CURSOR	= 8,
+	EUGL_WINDOWCOLOR= 9,
+	EUGL_SMALLICON	= 12,
+	EUGL_ACCUMBITS	= 14,
+	EUGL_DEPTHBITS	= 19,
+	EUGL_STENCILBITS= 20,
+	EUGL_WINDOWED	= 0,
+	EUGL_FULLSCREEN = 1,
+	EUGL_SINGLE	= 0,
+	EUGL_DOUBLE	= 2,
+	EUGL_BITS8	= 4,
+	EUGL_BITS15	= 8,
+	EUGL_BITS16	= 16,
+	EUGL_BITS24	= 32,
+	EUGL_BITS32	= 64,
+	EUGL_HANDLE_EVENTS = -2,
+	EUGL_LEFT_BUTTON= 1,
+	EUGL_RIGHT_BUTTON=2,
+	EUGL_MIDDLE_BUTTON=4,
+	EUGL_UP		= 0,
+	EUGL_DOWN	= 1
+
+constant
+	TM_ID=1,
+	TM_TIMEOUT=2,
+	TM_VALUE=3,
+	TM_PROC=4
+	
+
+global atom
+	hInst,
+        glhwnd,		-- The EuGL window handle
+        glhDC,		-- The EuGL devicecontext handle
+	wc,		-- WNDCLASSEX
+       	pfd,		-- PIXELFORMATDESCRIPTOR
+       	ps,		-- PAINTSTRUCT
+       	dmScreenSettings, -- DEVMODE
+       	funcval		-- Use to store the values of functions
+
+global atom glrect
+
+global integer
+	euglInit,
+	euglDraw,
+        euglExit,
+        euglKey,
+        euglReshape,
+        euglMouse,
+        euglMotion,
+        euglPassiveMotion,
+        euglTimer,
+        euglIdle,
+        euglFlags,
+        euglDisplayMode
+	
+global sequence
+	euglWCEX,	-- Window class
+	euglPFD		-- Pixelformat descriptor
+
+	
+
+
+constant glWindowTitle = allocate_string("THE TITLE OF YOUR APPLICATION   ")
+
+
+integer euglDBuf,euglwndxpos,euglwndypos,timerId,mouseState
+sequence euglTimers,euglPendingTimers
+
+euglTimers = repeat({},4)
+euglPendingTimers = euglTimers
+
+euglWCEX = repeat(-1,12)
+euglPFD = repeat(-1,26)
+	
+sequence euglWCEXdefault,euglPFDdefault
+ euglWCEXdefault=
+ {
+  -1,
+  CS_OWNDC,
+  -1,
+  0,
+  0,
+  -1,
+  c_func(LoadIcon,{ NULL,IDI_APPLICATION }),
+  c_func(LoadCursor,{ NULL,IDC_ARROW }),
+  c_func(GetStockObject, {BLACK_BRUSH}),
+  NULL,
+  -1,
+  c_func(LoadIcon,{ NULL,IDI_APPLICATION })
+ }
+euglPFDdefault = repeat(-1,26)
+euglPFDdefault[2]  = 1
+euglPFDdefault[3]  = or_bits(PFD_DRAW_TO_WINDOW,PFD_SUPPORT_OPENGL)
+euglPFDdefault[5]  = 16
+euglPFDdefault[19] = 16
+euglPFDdefault[24] = PFD_MAIN_PLANE
+
+
+
+hInst = 0
+glhwnd = -1
+timerId = 1
+mouseState = 0
+euglFlags = 0
+euglDraw = -1
+euglInit = -1
+euglExit = -1
+euglKey = -1
+euglReshape = -1
+euglMotion = -1
+euglPassiveMotion = -1
+euglMouse = -1
+euglIdle = 0
+euglDisplayMode = EUGL_WINDOWED
+euglwndxpos = 20
+euglwndypos = 20
+
+
+procedure poke2(atom dest,object word)
+ 	if sequence(word) then
+  		for i=1 to length(word) do
+   			poke(dest+((i-1)*2),and_bits(word[i],#00FF))
+   			poke(dest+((i-1)*2)+1,floor(and_bits(word[i],#FF00)/256))
+  		end for
+ 	else
+  		poke(dest,and_bits(word,#00FF))
+  		poke(dest+1,floor(and_bits(word,#FF00)/256))
+ 	end if
+end procedure
+
+
+global procedure pokef32(atom dest,object data)
+ 	if sequence(data) then
+  		for i = 1 to length(data) do
+   			poke(dest,atom_to_float32(data[i]))
+   			dest += 4
+  		end for
+ 	else
+  		poke(dest,atom_to_float32(data))
+ 	end if
+end procedure
+
+
+
+function CreateOpenGLWindow(integer id,sequence title, integer x, integer y,
+                            integer width, integer height,integer ty_pe, integer flags)
+
+    integer  pf
+    atom     hDC
+    atom     hWnd
+    atom     szAppName
+    atom     class
+    atom WndProcAddress
+
+    -- Only register the window class once - use hInst as a flag. 
+    if (not hInst) then
+      	wc = allocate(SIZE_OF_WNDCLASS)
+      	pfd = allocate(SIZE_OF_PIXELFORMATDESCRIPTOR)
+      	ps = allocate(SIZE_OF_PAINTSTRUCT)
+      	glrect = allocate(SIZE_OF_RECT)
+      	dmScreenSettings = allocate(SIZE_OF_DEVMODE)
+      	
+      	szAppName = allocate_string("OpenGL")
+      	hInst = instance()
+      	if id = -1 then
+		if message_box("The WndProc ID is not valid.", "Error", or_bits(MB_OK,MB_ICONERROR)) then end if
+	 	abort(1)
+      	end if
+      
+      	WndProcAddress = call_back(id) -- get 32-bit address for callback
+      	poke4(wc + cbSize, SIZE_OF_WNDCLASS)
+      	poke4(wc + lpfnWndProc, WndProcAddress)
+      	poke4(wc + hInstance, hInst)
+      	poke4(wc + lpszClassName, szAppName)
+      	for i = 1 to 12 do
+        	if euglWCEX[i]!=-1 then
+          		if euglWCEXdefault[i]!=-1 then
+            			poke4(wc + ((i-1)*4),euglWCEX[i])
+          		end if
+        	else
+          		if euglWCEXdefault[i]!=-1 then
+            			poke4(wc + ((i-1)*4),euglWCEXdefault[i])
+          		end if
+        	end if
+        end for
+        class = c_func(RegisterClassEx, { wc })
+        if (not class) then
+        	if message_box("RegisterClassEx() failed.", "Error", or_bits(MB_OK,MB_ICONERROR)) then end if
+        	abort(1)
+        end if
+    end if
+
+    if length(title)>32 then			--\
+     	title = title[1..32]				-- truncate title if neccesary
+    end if    					--/
+    poke(glWindowTitle,title)			--..poke it..	
+    if length(title)<32 then			--\
+     	poke(glWindowTitle+length(title),0)	-- poke zero-terminator
+    end if					--/
+
+    if euglDisplayMode = EUGL_FULLSCREEN then
+    	mem_set(dmScreenSettings, 0, SIZE_OF_DEVMODE)
+	poke2(dmScreenSettings+dmSize, SIZE_OF_DEVMODE)
+
+    	poke4(dmScreenSettings + dmBitsPerPel,{euglPFD[EUGL_COLORBITS],width,height})
+    	poke4(dmScreenSettings + dmFields, or_bits(DM_BITSPERPEL, or_bits(DM_PELSWIDTH, DM_PELSHEIGHT)))
+
+    	if (c_func(ChangeDisplaySettings,{dmScreenSettings, CDS_FULLSCREEN}) != DISP_CHANGE_SUCCESSFUL) then
+    		euglDisplayMode = EUGL_WINDOWED
+    	end if
+    end if
+    
+    if euglDisplayMode = EUGL_FULLSCREEN then
+    	hWnd = c_func(CreateWindow,
+    	       {
+    	        NULL, 
+    	        szAppName,
+    	        glWindowTitle,
+    	        WS_POPUP,
+    	        0, 0,
+    	        width, height,
+    	        NULL,
+    	        NULL,
+    	        hInst,
+    	        NULL
+    	       })
+    else
+    	hWnd = c_func(CreateWindow,
+    	       {
+    	        NULL, 
+    	        szAppName,
+    	        glWindowTitle,
+    	        WS_GLWINDOW,
+    	        x, y,
+    	        width, height,
+    	        NULL,
+    	        NULL,
+    	        hInst,
+    	        NULL
+    	       })
+    end if
+    
+    if (not hWnd) then
+	if message_box("CreateWindow() failed.", "Error", or_bits(MB_OK,MB_ICONERROR)) then end if
+	abort(1)
+    end if
+
+    glhwnd = hWnd
+    hDC = c_func(GetDC,{ hWnd })
+    glhDC = hDC
+    
+    -- There is no guarantee that the contents of the stack that become
+    -- the pfd are zeroed, therefore _make sure_ to clear these bits. 
+    mem_set(pfd, 0, SIZE_OF_PIXELFORMATDESCRIPTOR)
+    poke2( pfd + nSize        , SIZE_OF_PIXELFORMATDESCRIPTOR)
+    for i=1 to 2 do
+    	if euglPFD[i]!=-1 then
+          	if euglPFDdefault[i]!=-1 then
+            		poke2(pfd + ((i-1)*2),euglPFD[i])
+          	end if
+        else
+          	if euglPFDdefault[i]!=-1 then
+            		poke2(pfd + ((i-1)*2),euglPFDdefault[i])
+          	end if
+        end if
+    end for
+    if euglPFD[3]!=-1 then
+    	if euglPFDdefault[3]!=-1 then
+        	poke4(pfd + 4,euglPFD[3])
+        end if
+    else
+        if euglPFDdefault[3]!=-1 then
+          	poke4(pfd + 4,or_bits(euglPFDdefault[3],flags))
+        end if
+    end if
+    
+    for i=4 to 23 do
+    	if euglPFD[i]!=-1 then
+          	if euglPFDdefault[i]!=-1 then
+            		poke(pfd + 5 + (i-1),euglPFD[i])
+          	end if
+        else
+        	if euglPFDdefault[i]!=-1 then
+            		poke(pfd + 5 + (i-1),euglPFDdefault[i])
+          	end if
+        end if
+    end for
+    
+    for i=24 to 26 do
+        if euglPFD[i]!=-1 then
+          	if euglPFDdefault[i]!=-1 then
+            		poke4(pfd + 28 + ((i-24)*4),euglPFD[i])
+          	end if
+        else
+        	if euglPFDdefault[i]!=-1 then
+            		poke4(pfd + 28 + ((i-24)*4),euglPFDdefault[i])
+          	end if
+        end if
+    end for
+
+    pf = c_func(ChoosePixelFormat, { hDC, pfd })
+    if (not pf) then
+	if message_box("ChoosePixelFormat() failed.", "Error", or_bits(MB_OK,MB_ICONERROR)) then end if
+	abort(1)
+    end if 
+ 
+    if (not c_func(SetPixelFormat, { hDC, pf, pfd })) then
+	if message_box("SetPixelFormat() failed.", "Error", or_bits(MB_OK,MB_ICONERROR)) then end if
+	abort(1)
+    end if 
+
+    if c_func(DescribePixelFormat,
+              { hDC, pf, SIZE_OF_PIXELFORMATDESCRIPTOR, pfd }) then end if
+
+    --if c_func(ReleaseDC, { hDC, hWnd }) then end if
+
+    return hWnd
+end function
+
+constant WM_KEYUP        = #101
+
+function euglwndproc(atom hwnd, atom iMsg, atom wParam, atom lParam)
+	integer p
+
+        if iMsg = WM_MOUSEMOVE then
+           --?WM_MOUSEMOVE
+     		 -- if mouseState and euglMotion!=-1 then
+     			--call_proc(euglMotion,{LOWORD(lParam),HIWORD(lParam)})
+     		 -- elsif not mouseState and euglPassiveMotion!=-1 then
+     			call_proc(euglPassiveMotion,{LOWORD(lParam),HIWORD(lParam)})
+		  --end if
+           return 0
+          
+        end if
+        --
+	
+  	if iMsg = WM_PAINT then
+    		if ewBeginPaint(hwnd,ps)=NULL then
+      			if message_box("BeginPaint() returned NULL."&{13,10}&
+      					"This application will terminate.",
+                     			"Error",or_bits(MB_OK,MB_ICONERROR)) then
+                     	end if
+      			ewPostQuitMessage(0)
+    		end if
+    
+    		if euglDraw !=-1 then
+    			call_proc(euglDraw,{})
+    		end if
+    	    	    		
+    		ewEndPaint(hwnd,ps) 
+    		return 0
+  
+  	elsif iMsg = WM_SIZE then
+    		if euglReshape !=-1 then
+    			if c_func(GetClientRect,{ hwnd,glrect }) then end if
+    			call_proc(euglReshape,{peek4s(glrect+8),peek4s(glrect+12)})
+    		end if
+    		return 0
+  
+  	elsif iMsg = WM_KEYDOWN then
+		if euglKey !=-1 then
+			call_proc(euglKey,{wParam,0,0})
+     		end if
+     		return 0
+
+  	elsif iMsg = WM_KEYUP then
+		if euglKey !=-1 then
+			call_proc(euglKey,{wParam,1,0})
+     		end if
+     		return 0
+     	
+     	elsif iMsg = WM_LBUTTONDOWN then
+     		mouseState = or_bits(mouseState,EUGL_LEFT_BUTTON)
+     		if euglMouse !=-1 then
+     			call_proc(euglMouse,{EUGL_LEFT_BUTTON,EUGL_DOWN,
+     					     LOWORD(lParam),HIWORD(lParam)})
+     		end if
+     		return 0
+
+     	elsif iMsg = WM_RBUTTONDOWN then
+     		mouseState = or_bits(mouseState,EUGL_RIGHT_BUTTON)
+     		if euglMouse !=-1 then
+     			call_proc(euglMouse,{EUGL_RIGHT_BUTTON,EUGL_DOWN,
+     					     LOWORD(lParam),HIWORD(lParam)})
+     		end if
+     		return 0
+
+     	elsif iMsg = WM_LBUTTONUP then
+     		mouseState = and_bits(mouseState,not_bits(EUGL_LEFT_BUTTON))
+     		if euglMouse !=-1 then
+     			call_proc(euglMouse,{EUGL_LEFT_BUTTON,EUGL_UP,
+     					     LOWORD(lParam),HIWORD(lParam)})
+     		end if
+     		return 0
+
+     	elsif iMsg = WM_RBUTTONUP then
+     		mouseState = and_bits(mouseState,not_bits(EUGL_RIGHT_BUTTON))
+     		if euglMouse !=-1 then
+     			call_proc(euglMouse,{EUGL_RIGHT_BUTTON,EUGL_UP,
+     					     LOWORD(lParam),HIWORD(lParam)})
+     		end if
+     		return 0
+
+     	elsif iMsg = WM_TIMER then
+		p = find(wParam,euglTimers[TM_ID])
+		if p then
+			c_proc(KillTimer,{hwnd,wParam})
+			call_proc(euglTimers[TM_PROC][p],{wParam})
+		end if
+		return 0
+		
+  	elsif iMsg = WM_CLOSE then
+    		ewPostQuitMessage(0)
+    		return 0
+  
+  	end if
+
+
+  
+  	return ewDefWindowProc(hwnd, iMsg, wParam, lParam)
+end function
+
+
+
+global procedure euglInitDisplayMode(integer mode)
+	integer i
+	if and_bits(mode,EUGL_DOUBLE) then
+		euglFlags = or_bits(euglFlags,PFD_DOUBLEBUFFER)
+	end if
+	if and_bits(mode,EUGL_FULLSCREEN) then
+		euglDisplayMode = EUGL_FULLSCREEN
+	end if
+	i = and_bits(mode,#7C)
+	if i=EUGL_BITS8 then
+		euglPFD[EUGL_COLORBITS] = 8
+	elsif i=EUGL_BITS15 then
+		euglPFD[EUGL_COLORBITS] = 15
+	elsif i=EUGL_BITS16 then
+		euglPFD[EUGL_COLORBITS] = 16
+	elsif i=EUGL_BITS24 then
+		euglPFD[EUGL_COLORBITS] = 24
+	elsif i=EUGL_BITS32 then
+		euglPFD[EUGL_COLORBITS] = 32
+	end if		
+end procedure
+
+
+global procedure euglInitWindowPosition(integer xpos,integer ypos)
+	euglwndxpos = xpos
+	euglwndypos = ypos
+end procedure
+
+
+global procedure euglSetWindowTitle(sequence title)
+	ewSetWindowText(glhwnd,title)
+end procedure
+
+
+global procedure euglPostRedisplay()
+	if ewPostMessage(glhwnd,WM_PAINT,0,0) then end if
+end procedure
+
+
+global procedure euglInitFunc(integer id)
+	euglInit = id
+end procedure
+
+global procedure euglExitFunc(integer id)
+	euglExit = id
+end procedure
+
+global procedure euglDisplayFunc(integer id)
+	euglDraw = id
+end procedure
+
+
+global procedure euglReshapeFunc(integer id)
+	euglReshape = id
+end procedure
+
+
+global procedure euglKeyboardFunc(integer id)
+	euglKey = id
+end procedure
+
+global procedure euglMouseFunc(integer id)
+	euglMouse = id
+end procedure
+
+global procedure euglMotionFunc(integer id)
+	euglMotion = id
+end procedure
+
+global procedure euglPassiveMotionFunc(integer id)
+	euglPassiveMotion = id
+end procedure
+
+
+global procedure euglTimerFunc(integer msec,integer tmproc,integer id)
+	integer p
+	
+	if glhwnd = -1 then
+		p = find(id,euglPendingTimers[TM_ID])
+		if p then
+			euglPendingTimers[TM_PROC][p] = tmproc
+			euglPendingTimers[TM_TIMEOUT][p] = msec
+			euglPendingTimers[TM_VALUE][p] = time()
+		else		
+			euglPendingTimers[TM_ID] &= id
+			euglPendingTimers[TM_PROC] &= tmproc
+			euglPendingTimers[TM_TIMEOUT] &= msec
+			euglPendingTimers[TM_VALUE] &= time()
+		end if
+	else
+		p = find(id,euglTimers[TM_ID])
+		if p then
+			euglTimers[TM_PROC][p] = tmproc
+			euglTimers[TM_TIMEOUT][p] = msec
+		else		
+			euglTimers[TM_ID] &= id
+			euglTimers[TM_PROC] &= tmproc
+			euglTimers[TM_TIMEOUT] &= msec
+		end if
+		if c_func(SetTimer,{glhwnd,id,msec,0}) then end if
+	end if
+end procedure
+
+
+
+global procedure EuGLMain(integer id,sequence title,integer xdim,integer ydim)
+
+    	--atom hDC			-- device context 
+    	atom hRC			-- opengl context 
+    	atom hWnd			-- window 
+    	atom msg			-- message
+    	atom timeOut
+    	integer keepRocking
+
+    	msg = allocate(SIZE_OF_MESSAGE)
+    	euglDBuf = and_bits(euglFlags,PFD_DOUBLEBUFFER)
+
+	
+    	if id != EUGL_HANDLE_EVENTS then
+    		hWnd = CreateOpenGLWindow(id,title, euglwndxpos, euglwndypos, xdim, ydim, PFD_TYPE_RGBA, euglFlags)
+    	else
+    		hWnd = CreateOpenGLWindow(routine_id("euglwndproc"),title, euglwndxpos, euglwndypos, xdim, ydim, PFD_TYPE_RGBA, euglFlags)
+    	end if
+    	glhwnd = hWnd
+    	
+    	if (hWnd = NULL) then
+		abort(1)
+    	end if
+
+    	--hDC = c_func(GetDC, { hWnd })		-- Get a device context
+    	--glhDC = hDC
+    	hRC = c_func(wglCreateContext, { glhDC })	-- Get an opengl rendering context
+    	c_proc(wglMakeCurrent, { glhDC, hRC })	-- Set opengl rendering context
+
+	-- Start all pending timers
+	for i=1 to length(euglPendingTimers[TM_ID]) do
+		timeOut = ((euglPendingTimers[TM_TIMEOUT][i]/1000)+euglPendingTimers[TM_VALUE][i])-time()
+		timeOut *= 1000
+		if timeOut<0 then
+			timeOut = euglPendingTimers[TM_TIMEOUT][i]-remainder(-timeOut,euglPendingTimers[TM_TIMEOUT][i])
+    		end if
+    		if c_func(SetTimer,{glhwnd,euglPendingTimers[TM_ID][i],timeOut,0}) then
+    		end if
+    	end for
+
+	-- Call the initfunc, if any
+    	if euglInit!=-1 then
+    		call_proc(euglInit,{})
+    	end if
+
+    	c_proc(ShowWindow, {hWnd, SW_SHOW})
+
+   	if euglReshape !=-1 then
+    		call_proc(euglReshape,{xdim,ydim})
+    	end if
+    		
+    	keepRocking = 1
+    	while keepRocking do
+     		while(c_func(PeekMessage, { msg, hWnd, 0, 0, PM_NOREMOVE })) do
+      			if (c_func(GetMessage, { msg, hWnd, 0, 0 })) then
+ 				c_proc(TranslateMessage, { msg })
+        			c_proc(DispatchMessage, { msg })
+      			else
+        			keepRocking = 0
+        			exit
+      			end if
+     		end while
+     		if euglDBuf and euglDraw!=-1 then
+       			call_proc(euglDraw,{})
+      		end if	
+    	end while						
+
+    	c_proc(wglMakeCurrent, { NULL, NULL })
+    	if c_func(ReleaseDC, { glhDC, glhwnd }) then end if	-- release device context
+    	if c_func(wglDeleteContext, { hRC }) then end if	-- delete the opengl rendering context
+    	if c_func(DestroyWindow, { glhwnd }) then end if	-- destroy the window	
+    	if (euglExit!=-1) then call_proc(euglExit,{}) end if
+end procedure
+
+

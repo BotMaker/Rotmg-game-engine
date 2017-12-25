@@ -1,0 +1,114 @@
+include misc.e
+
+sequence behavior_list,behavior_freelist
+behavior_list={}
+behavior_freelist={}
+global constant behavior_email = 1
+
+
+
+global function behavior_new(integer behavior_id, sequence data, integer behavior_handle)
+  integer handle
+  
+  if length(behavior_freelist)>0 then
+    handle= behavior_freelist[1]
+    behavior_freelist = behavior_freelist[2..length(behavior_freelist)]
+  else
+    behavior_list= append(behavior_list,{0})
+    handle=length(behavior_list)
+  end if
+  
+  behavior_list[handle]={handle,behavior_id,data,behavior_handle}
+
+  return handle
+end function
+
+
+global procedure behavior_delete(integer handle)
+  behavior_list[handle]={}
+  behavior_freelist =append(behavior_freelist, handle)
+end procedure
+
+integer cooldown_id,multiattack_id
+
+function multiattack(integer handle, atom td)
+  sequence data
+  atom radius, angle,offset
+  integer num_shot, projectile_index
+
+  --MultiAttack(float radius, float angle, int numShot, float offset, int projectileIndex)
+  data=behavior_list[handle][3]
+
+  radius=data[1]
+  angle=data[2]
+  num_shot=data[3]
+  offset=data[5]
+  projectile_index=data[6]
+  
+  --dist=point_distance(player_x,player_y, me.x, me.y)
+  --if point_distance(player_x,player_y, me.x, me.y)
+
+  end if
+
+  return 0-- false
+end function 
+
+multiattack_id=routine_id("multiattack")
+?multiattack_id
+
+--every funcion takes a sequence 
+function cooldown(integer handle, atom td)
+  sequence data
+  integer cool,ret
+  atom remaining_tick
+  data=behavior_list[handle][3]
+  cool=data[1]
+  remaining_tick=data[2]
+
+  remaining_tick-=td
+
+  if remaining_tick<=0 then
+    if data[4]!=0 then
+      --behavior_list[behavior_list[handle][4]]
+      ret=call_func(behavior_list[ behavior_list[handle][4] ][2], {behavior_list[ behavior_list[handle][4] ][1], td})
+    end if
+    remaining_tick=cool
+    ret=1
+  else
+    ret=0
+  end if
+
+  data[2]=remaining_tick
+  behavior_list[handle][3]=data
+
+  return ret
+end function
+
+cooldown_id=routine_id("cooldown")
+?cooldown_id
+
+sequence behaviors
+behaviors={}
+integer nextbav
+
+--one cooldown timer used to tigger projectile 1
+nextbav=behavior_new(multiattack_id, {12,10,5,0,0,0}, 0)
+behaviors&=behavior_new(cooldown_id, {1000,0,0,nextbav }, nextbav)
+
+--second cooldown timer used to tigger projectile 2
+nextbav=0--behavior_new(PredictiveAttack_id, {10,1,1,0,0}, 0)
+behaviors&=behavior_new(cooldown_id, {650,0,0,nextbav }, nextbav)
+
+procedure update(atom td)
+integer ret
+  for i=1 to length(behaviors) do
+    ret=call_func( behavior_list[ behaviors[i] ][2], {behaviors[i],td})
+  end for
+end procedure
+
+for i=1 to 1000 do
+  update(i)
+end for
+
+
+sleep(100)

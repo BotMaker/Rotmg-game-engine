@@ -1,0 +1,372 @@
+
+
+sequence equip_list,object_list
+equip_list={}
+object_list=repeat({},65536)
+
+function equip_new()
+	return {
+{"type",0},
+{"id",0},
+{"Class",0},
+{"Item",0},
+{"Texture",0},
+{"File",0},
+{"Index",0},
+{"SlotType",0},
+{"Tier",0},
+{"Description",0},
+{"PetFamily",0},
+{"Rarity",0},
+{"Activate",0},
+{"Consumable",0},
+{"BagType",0},
+{"feedPower",0},
+{"DisplayId",0},
+{"Soulbound",0},
+{"RateOfFire",0},
+{"Sound",0},
+{"Projectile",0},
+{"ObjectId",0},
+{"Speed",0},
+{"MinDamage",0},
+{"MaxDamage",0},
+{"LifetimeMS",0},
+{"OldSound",0},
+{"FameBonus",0},
+{"NumProjectiles",0},
+{"ArcGap",0},
+{"MultiHit",0},
+{"Parametric",0},
+{"PassesCover",0},
+{"Size",0},
+{"ConditionEffect",0},
+{"ParticleTrail",0},
+{"ActivateOnEquip",0},
+{"amount",0},
+{"Usable",0},
+{"MpCost",0},
+{"Armor",0},
+{"Potion",0},
+{"Doses",0},
+{"SuccessorId",0},
+{"duration",0},
+{"range",0},
+{"Cooldown",0},
+{"Amplitude",0},
+{"Frequency",0},
+{"totalDamage",0},
+{"condDuration",0},
+{"angleOffset",0},
+{"maxTargets",0},
+{"Resurrects",0},
+{"lockedName",0},
+{"condEffect",0},
+{"effect",0},
+{"checkExistingEffect",0},
+{"color",0},
+{"Timer",0},
+{"XpBoost",0},
+{"ScaleValue",0},
+{"ExtraTooltipData",0},
+{"MpEndCost",0},
+{"MultiPhase",0},
+{"LTBoosted",0},
+{"LDBoosted",0},
+{"Backpack",0},
+{"Treasure",0},
+{"AnimatedTexture",0},
+{"Wavy",0},
+{"Sprite",0},
+{}
+}
+
+end function
+
+function ActivateOnEquip_new()
+  return 
+  {
+  {"ActivateOnEquip",0},
+  {"stat",0},
+  {"amount",0}
+  }
+end function
+
+constant equip=equip_new()
+
+constant ActivateOnEquip=ActivateOnEquip_new()
+
+function equip_index(sequence name)
+  for i=1 to length(equip)-1 do
+     if equal(equip[i][1],name) then
+       return i	
+     end if
+  end for	
+end function
+
+
+function ActivateOnEquip_index(sequence name)
+  for i=1 to length(ActivateOnEquip) do
+     if equal(ActivateOnEquip[i][1],name) then
+       return i	
+     end if
+  end for	
+end function
+
+
+
+global constant equip_speed=equip_index("Speed")
+global constant equip_lifetime=equip_index("LifetimeMS")
+global constant equip_numprojectiles=equip_index("NumProjectiles")
+global constant equip_arcgap=equip_index("ArcGap")
+global constant equip_amplitude=equip_index("Amplitude")
+global constant equip_frequency=equip_index("Frequency")
+global constant equip_wavy=equip_index("Wavy")
+global constant equip_parametric=equip_index("Parametric")
+--global constant equip_magnitude=equip_index("Magnitude")
+global constant equip_slotType=equip_index("SlotType")
+global constant equip_tier=equip_index("Tier")
+
+global constant equip_indexx=equip_index("Index")
+global constant equip_file=equip_index("File")
+global constant equip_sprite=equip_index("Sprite")
+
+global constant equip_description=equip_index("Description")
+
+constant equip_ActivateOnEquip=length(equip)
+
+global constant equip_ActivateOnEquip_ActivateOnEquip=ActivateOnEquip_index("ActivateOnEquip")
+
+global constant equip_ActivateOnEquip_stat=ActivateOnEquip_index("stat")
+global constant equip_ActivateOnEquip_amount=ActivateOnEquip_index("amount")
+
+
+
+
+
+atom root,att,child, nchild, celement
+sequence ret,name1,attname,name2
+
+integer index,ActivateOnEquip_id
+ActivateOnEquip_id=0
+
+index=0
+
+procedure process_children(atom node)
+atom nchild,att,celement
+
+	nchild=tinyxml_node_firstchild(node)
+	if nchild=0 then
+   	  return
+    end if
+
+    if tinyxml_node_nochildren(nchild)=1 then
+   	  return
+    end if
+
+
+	while nchild!=0 do
+
+      	name2=tinyxml_node_value(nchild)
+      	
+      	celement=tinyxml_node_toelement(nchild)
+      	
+        if celement!=0 then
+        	
+          att=tinyxml_frist_attribute(celement)
+          if att then
+
+            while att!=0 do
+              attname=tinyxml_attribute_name(att)
+
+              for i=1 to length(equip_list[index]) do
+      	        if equal(equip_list[index][i][1],attname) then
+      	          equip_list[index][i][2]=tinyxml_attribute_value(att)
+      		      exit
+      	        end if
+              end for
+              att=tinyxml_attribute_next(att)
+            end while
+          end if
+
+        end if
+
+        if celement!=0 then
+          ret=tinyxml_element_gettext(celement)
+          if length(ret) then
+
+	      else
+          end if
+          for i=1 to length(equip_list[index]) do
+      	      if equal(equip_list[index][i][1],name2) then
+      	        equip_list[index][i][2]=ret
+      		    exit
+      	      end if
+            end for
+        end if
+
+        if tinyxml_node_nochildren(nchild)=0 then
+   	      process_children(nchild)
+        end if
+        nchild=tinyxml_node_IterateChildren(node,nchild)
+      end while
+end procedure
+
+if tinyxml_load_file(doc,"xml\\equip.xml")=1 then
+  root=tinyxml_frist_child_element(doc, "Objects")
+
+
+  att=tinyxml_frist_attribute(root)
+  if att then
+  	
+    puts(1,tinyxml_attribute_name(att)&"  ")
+
+    puts(1,tinyxml_attribute_value(att)&"\n")
+  end if
+
+  child=tinyxml_element_firstchild(root)
+
+
+
+  while child!=0 do
+
+    name1=tinyxml_node_value(child)
+    if equal(name1,"Object") then
+      equip_list=append(equip_list, equip_new() )
+      index=length(equip_list)
+    end if
+
+
+    att=tinyxml_frist_attribute(child)
+
+    if att then
+
+      while att!=0 do
+        attname=tinyxml_attribute_name(att)
+        for i=1 to length(equip_list[index]) do
+      	  if equal(equip_list[index][i][1],attname) then
+      	    equip_list[index][i][2]=tinyxml_attribute_value(att)
+      		exit
+      	  end if
+        end for
+        att=tinyxml_attribute_next(att)
+      end while
+
+    end if
+
+
+    nchild=tinyxml_node_firstchild(child)
+    	
+      while nchild!=0 do
+      	name2=tinyxml_node_value(nchild)
+      	
+        celement=tinyxml_node_toelement(nchild)
+
+        if celement!=0 then
+        	
+
+          att=tinyxml_frist_attribute(celement)
+
+          if att then
+
+            while att!=0 do
+
+              attname=tinyxml_attribute_name(att)
+              for i=1 to length(equip_list[index])-1 do
+      	        if equal(equip_list[index][i][1],attname) then
+      	         equip_list[index][i][2]=tinyxml_attribute_value(att)
+      		     exit
+      	       end if
+              end for
+              att=tinyxml_attribute_next(att)
+
+            end while
+          end if
+
+        end if
+
+        if celement!=0 then
+          ret=tinyxml_element_gettext(celement)
+          if length(ret) then
+
+	      else
+          end if
+            for i=1 to length(equip_list[index]) do
+      	      if equal(equip_list[index][i][1],name2) then
+      	        equip_list[index][i][2]=ret
+      		    exit
+      	      end if
+            end for
+        end if
+
+        process_children(nchild)
+
+        nchild=tinyxml_node_IterateChildren(child,nchild)
+      end while
+      child=tinyxml_node_IterateChildren(root,child)
+  end while	
+end if
+
+
+for j=1 to length(equip_list) do
+  object_list[ str_tol(equip_list[j][1][2]) ]=equip_list[j]	
+end for
+
+global function equip_delta( integer index, integer id )
+  if integer(object_list[ index ][id][2]) then
+  	return 0
+  end if	
+
+  if length(object_list[ index ][id][2])=0 then
+  	return 1
+  else
+    return object_list[ index ][id][2]
+  end if
+
+end function
+
+
+global function equip_delta_mod( integer index, integer id )
+    return object_list[ index ][id][2]
+end function
+
+
+global procedure equip_set_sprite(sequence data)
+for i=1 to length(object_list) do
+  if length(object_list[i]) then
+
+    object_list[ i ][equip_indexx][2]=str_tol(object_list[ i ][equip_indexx][2])
+
+    for j=1 to length(data) do
+      if equal(data[j][1],equip_delta(i,equip_file)) then
+          object_list[ i ][equip_sprite][2]=data[j][2]
+          exit
+    	end if
+      end for
+
+  end if
+end for
+end procedure
+
+
+
+sequence file_list
+file_list={}
+
+procedure file_enter(sequence name)
+  for i=1 to length(file_list) do
+    if equal(file_list[i],name ) then
+      return
+    end if
+  end for
+
+  file_list=append(file_list,name)
+  puts(1,name&"\n")
+end procedure
+
+--for i=1 to length(object_list) do
+--  if length(object_list[i]) then
+    --puts(1,ground_delta(i,ground_file)&"\n")
+    --file_enter(equip_delta(i,equip_file))
+--  end if
+--end for

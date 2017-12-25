@@ -1,0 +1,244 @@
+--Copyright (c) 1985-95, Microsoft Corporation
+
+-- (c) Copyright 1993, Silicon Graphics, Inc.
+-- ALL RIGHTS RESERVED 
+-- Permission to use, copy, modify, and distribute this software for 
+-- any purpose and without fee is hereby granted, provided that the above
+-- copyright notice appear in all copies and that both the copyright notice
+-- and this permission notice appear in supporting documentation, and that 
+-- the name of Silicon Graphics, Inc. not be used in advertising
+-- or publicity pertaining to distribution of the software without specific,
+-- written prior permission. 
+--
+-- THE MATERIAL EMBODIED ON THIS SOFTWARE IS PROVIDED TO YOU "AS-IS"
+-- AND WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED OR OTHERWISE,
+-- INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY OR
+-- FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL SILICON
+-- GRAPHICS, INC.  BE LIABLE TO YOU OR ANYONE ELSE FOR ANY DIRECT,
+-- SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY
+-- KIND, OR ANY DAMAGES WHATSOEVER, INCLUDING WITHOUT LIMITATION,
+-- LOSS OF PROFIT, LOSS OF USE, SAVINGS OR REVENUE, OR THE CLAIMS OF
+-- THIRD PARTIES, WHETHER OR NOT SILICON GRAPHICS, INC.  HAS BEEN
+-- ADVISED OF THE POSSIBILITY OF SUCH LOSS, HOWEVER CAUSED AND ON
+-- ANY THEORY OF LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE
+-- POSSESSION, USE OR PERFORMANCE OF THIS SOFTWARE.
+-- 
+-- US Government Users Restricted Rights 
+-- Use, duplication, or disclosure by the Government is subject to
+-- restrictions set forth in FAR 52.227.19(c)(2) or subparagraph
+-- (c)(1)(ii) of the Rights in Technical Data and Computer Software
+-- clause at DFARS 252.227-7013 and/or in similar or successor
+-- clauses in the FAR or the DOD or NASA FAR Supplement.
+-- Unpublished-- rights reserved under the copyright laws of the
+-- United States.  Contractor/manufacturer is Silicon Graphics,
+-- Inc., 2011 N.  Shoreline Blvd., Mountain View, CA 94039-7311.
+--
+-- OpenGL(TM) is a trademark of Silicon Graphics, Inc.
+ 
+
+
+-- Euphoria version by Mic, 000304
+
+
+--
+-- ToolKit Window Types
+-- In the future, AUX_RGBA may be a combination of both RGB and ALPHA
+
+
+global constant AUX_RGB = 0 
+global constant AUX_RGBA = AUX_RGB 
+global constant AUX_INDEX = 1 
+global constant AUX_SINGLE = 0 
+global constant AUX_DOUBLE = 2 
+global constant AUX_DIRECT = 0 
+global constant AUX_INDIRECT = 4 
+
+global constant AUX_ACCUM = 8 
+global constant AUX_ALPHA = 16 
+global constant AUX_DEPTH24 = 32       -- 24-bit depth buffer 
+global constant AUX_STENCIL = 64 
+global constant AUX_AUX = 128 
+global constant AUX_DEPTH16 = 256      -- 16-bit depth buffer 
+global constant AUX_FIXED_332_PAL = 512 
+global constant AUX_DEPTH = AUX_DEPTH16  -- default is 16-bit depth buffer 
+
+-- 
+-- Window Masks
+
+
+global function AUX_WIND_IS_RGB(integer x)
+  return (and_bits((x), AUX_INDEX) = 0)
+end function
+
+global function AUX_WIND_IS_INDEX(integer x)
+  return (and_bits((x), AUX_INDEX) != 0)
+end function
+
+global function AUX_WIND_IS_SINGLE(integer x)
+  return (and_bits((x), AUX_DOUBLE) = 0)
+end function
+
+global function AUX_WIND_IS_DOUBLE(integer x)
+  return (and_bits((x), AUX_DOUBLE) != 0)
+end function
+
+global function AUX_WIND_IS_INDIRECT(integer x)
+  return (and_bits((x), AUX_INDIRECT) != 0)
+end function
+
+global function AUX_WIND_IS_DIRECT(integer x)
+  return (and_bits((x), AUX_INDIRECT) = 0)
+end function
+
+global function AUX_WIND_HAS_ACCUM(integer x)
+  return (and_bits((x), AUX_ACCUM) != 0)
+end function
+
+global function AUX_WIND_HAS_ALPHA(integer x)
+  return (and_bits((x), AUX_ALPHA) != 0)
+end function
+
+global function AUX_WIND_HAS_DEPTH(integer x)
+  return (and_bits((x), or_bits(AUX_DEPTH24, AUX_DEPTH16)) != 0)
+end function
+
+global function AUX_WIND_HAS_STENCIL(integer x)
+  return (and_bits((x), AUX_STENCIL) != 0)
+end function
+
+global function AUX_WIND_USES_FIXED_332_PAL(integer x)
+  return (and_bits((x), AUX_FIXED_332_PAL) != 0)
+end function
+
+
+
+-- 
+-- ToolKit Event Types
+
+global constant AUX_EXPOSE = 1 
+global constant AUX_CONFIG = 2 
+global constant AUX_DRAW = 4 
+global constant AUX_KEYEVENT = 8 
+global constant AUX_MOUSEDOWN = 16 
+global constant AUX_MOUSEUP = 32 
+global constant AUX_MOUSELOC = 64 
+
+--
+-- Toolkit Event Data Indices
+
+global constant AUX_WINDOWX = 0 
+global constant AUX_WINDOWY = 1 
+global constant AUX_MOUSEX = 0 
+global constant AUX_MOUSEY = 1 
+global constant AUX_MOUSESTATUS = 3 
+global constant AUX_KEY = 0 
+global constant AUX_KEYSTATUS = 1 
+
+--
+-- ToolKit Event Status Messages
+
+global constant AUX_LEFTBUTTON = 1 
+global constant AUX_RIGHTBUTTON = 2 
+global constant AUX_MIDDLEBUTTON = 4 
+global constant AUX_SHIFT = 1 
+global constant AUX_CONTROL = 2 
+
+-- 
+-- ToolKit Key Codes
+
+global constant AUX_RETURN = #0D 
+global constant AUX_ESCAPE = #1B 
+global constant AUX_SPACE = #20 
+global constant AUX_LEFT = #25 
+global constant AUX_UP = #26 
+global constant AUX_RIGHT = #27 
+global constant AUX_DOWN = #28 
+global constant AUX_A = 'A'
+global constant AUX_B = 'B'
+global constant AUX_C = 'C'
+global constant AUX_D = 'D'
+global constant AUX_E = 'E'
+global constant AUX_F = 'F'
+global constant AUX_G = 'G'
+global constant AUX_H = 'H'
+global constant AUX_I = 'I'
+global constant AUX_J = 'J'
+global constant AUX_K = 'K'
+global constant AUX_L = 'L'
+global constant AUX_M = 'M'
+global constant AUX_N = 'N'
+global constant AUX_O = 'O'
+global constant AUX_P = 'P'
+global constant AUX_Q = 'Q'
+global constant AUX_R = 'R'
+global constant AUX_S = 'S'
+global constant AUX_T = 'T'
+global constant AUX_U = 'U'
+global constant AUX_V = 'V'
+global constant AUX_W = 'W'
+global constant AUX_X = 'X'
+global constant AUX_Y = 'Y'
+global constant AUX_Z = 'Z'
+global constant AUX_a = 'a'
+global constant AUX_b = 'b'
+global constant AUX_c = 'c'
+global constant AUX_d = 'd'
+global constant AUX_e = 'e'
+global constant AUX_f = 'f'
+global constant AUX_g = 'g'
+global constant AUX_h = 'h'
+global constant AUX_i = 'i'
+global constant AUX_j = 'j'
+global constant AUX_k = 'k'
+global constant AUX_l = 'l'
+global constant AUX_m = 'm'
+global constant AUX_n = 'n'
+global constant AUX_o = 'o'
+global constant AUX_p = 'p'
+global constant AUX_q = 'q'
+global constant AUX_r = 'r'
+global constant AUX_s = 's'
+global constant AUX_t = 't'
+global constant AUX_u = 'u'
+global constant AUX_v = 'v'
+global constant AUX_w = 'w'
+global constant AUX_x = 'x'
+global constant AUX_y = 'y'
+global constant AUX_z = 'z'
+global constant AUX_0 = '0'
+global constant AUX_1 = '1'
+global constant AUX_2 = '2'
+global constant AUX_3 = '3'
+global constant AUX_4 = '4'
+global constant AUX_5 = '5'
+global constant AUX_6 = '6'
+global constant AUX_7 = '7'
+global constant AUX_8 = '8'
+global constant AUX_9 = '9'
+
+--
+-- ToolKit Gets and Sets
+
+global constant AUX_FD = 1   		-- return fd (long) 
+global constant AUX_COLORMAP = 3   	-- pass buf of r, g and b (unsigned char) 
+global constant AUX_GREYSCALEMAP = 4 
+global constant AUX_FOGMAP = 5   	-- pass fog and color bits (long) 
+global constant AUX_ONECOLOR = 6   	-- pass index, r, g, and b (long) 
+
+--
+-- Color Macros
+
+
+global constant AUX_BLACK = 0 
+global constant AUX_RED = 13 
+global constant AUX_GREEN = 14 
+global constant AUX_YELLOW = 15 
+global constant AUX_BLUE = 16 
+global constant AUX_MAGENTA = 17 
+global constant AUX_CYAN = 18 
+global constant AUX_WHITE = 19 
+
+
+
+
+

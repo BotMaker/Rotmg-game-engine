@@ -1,0 +1,155 @@
+------------------------------------------------------------------------------------
+--  HSplitter v1.0  <eunexus@yahoo.com>
+--
+--  This software is free and may be used in any program or project,
+--  compiled or not, for any purpose as long as I am given due credit.
+------------------------------------------------------------------------------------
+--  If there are any comments, questions, concerns, (bugs *gasp*) please email me.
+------------------------------------------------------------------------------------
+
+without warning
+integer		isTracking		isTracking = 0
+sequence	oldPosition		oldPosition = {}
+atom		memPattern		memPattern = 0
+
+constant
+CreatePatternBrush	= registerw32Function( gdi32, "CreatePatternBrush", {C_POINTER}, C_POINTER),
+PatBlt				= registerw32Procedure( gdi32, "PatBlt", {C_POINTER,C_INT,C_INT,C_INT,C_INT,C_LONG})
+
+-- procedure: drawXORbar [draws grid pattern] --------------------------------------
+procedure drawXORbar( atom self, sequence pos )
+	atom hDC
+	atom hBitmap
+	atom hPrevBmp
+	atom hBrush
+	atom Void
+
+	hDC = w32Func( xGetDC, {0} )
+	hBitmap = w32Func( xCreateBitmap, {8,8,1,1,memPattern} )
+	hBrush = w32Func( CreatePatternBrush, {hBitmap} )
+	hPrevBmp = w32Func( xSelectObject, {hDC,hBrush} )
+	w32Proc( PatBlt, {hDC,pos[1],pos[2]-3,pos[5],7,PATINVERT} )
+
+	Void = w32Func( xSelectObject, {hDC,hPrevBmp} )
+	Void = w32Func( xDeleteObject, {hBrush} )
+	Void = w32Func( xDeleteObject, {hBitmap} )
+	Void = w32Func( xReleaseDC, {0,hDC} )
+end procedure
+
+-- procedure: hor_mouse_events [handles mouse events] ------------------------------
+procedure hor_mouse_events( integer self, integer event, sequence param )
+	sequence WinRect
+	sequence Temp
+	sequence Temp2
+	sequence MousePos
+	sequence Offset
+	atom Parent
+	atom Parent2
+	atom Void
+
+	Parent = findParent( self )
+	Temp = getClientRect( Parent )
+	WinRect = ClientToScreen( Parent, Temp[1], Temp[2] )
+	WinRect &= ClientToScreen( Parent, Temp[1]+Temp[3], Temp[2]+Temp[4] )
+	WinRect &= Temp[5..6]
+
+	MousePos = getPointerPos()
+	Temp = getWindowRect( Parent )
+	Void = findParent( self )
+	while Void > 0 do
+		Parent2 = Void
+		Void = findParent( Parent2 )
+	end while
+	Temp2 = getClientRect( Parent2 )
+
+	if MousePos[2] >= WinRect[2]+3 and MousePos[2] <= WinRect[2]+WinRect[6]-4 then
+		WinRect[2] = MousePos[2]
+	else
+		if MousePos[2] >= WinRect[2]+4 then
+			WinRect[2] += WinRect[6]-4
+		else
+			WinRect[2] += 3
+		end if
+	end if
+
+	Offset = getClientPoint( self, 0, 0 )
+	Offset = ScreenToClient( Parent2, Offset[1], Offset[2] )
+	if WinRect[5]+Offset[1] > Temp2[5] then
+		WinRect[5] = Temp2[5] - Offset[1]
+	end if
+
+	if param[1] = LeftDown then
+		captureMouse( self )
+		isTracking = True
+		drawXORbar( self, WinRect )
+		oldPosition = WinRect
+
+	elsif param[1] = MouseMove then
+		if isTracking = True then
+			drawXORbar( self, oldPosition )
+			drawXORbar( self, WinRect )
+			oldPosition = WinRect
+		end if
+
+	elsif param[1] = LeftUp then
+		if isTracking = True then
+			drawXORbar( self, oldPosition )
+			isTracking = False
+			releaseMouse()
+
+			WinRect = getClientRect( Parent )
+			MousePos = ScreenToClient( Parent, MousePos[1], MousePos[2] )
+			Temp = getClientRect( Parent )
+			if Temp[2] != 0 then MousePos[2] -= Temp[2] end if
+			if MousePos[2] < 3 then MousePos[2] = 3 end if
+			if MousePos[2] > WinRect[4]-4 then MousePos[2] = WinRect[4]-4 end if
+			Temp = getUserProperty( self, "GMID" )
+			manage( Temp[1], self, {0,0}, {0,MousePos[2]-3}, {1.0,0}, {0,MousePos[2]+4} )
+			Void = sendMessage( Parent, WM_SIZE, SIZE_RESTORED, pack_word(WinRect[5],WinRect[2]+WinRect[6]) )
+		end if
+	end if
+end procedure
+
+-- function: hor_close [free up used memory for the pattern] -----------------------
+procedure hor_close( integer self, integer event, sequence param )
+	free( memPattern )
+end procedure
+
+-- function: splitter_hor [creates a new splitter control] -------------------------
+global function splitter_hor( sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, atom style, atom exStyle )
+	sequence WinRect
+	sequence WinPos
+	atom newCntlID
+	atom Void
+
+	if memPattern = 0 then
+		memPattern = allocate( 16 )
+		poke4( memPattern, {#00AA0055,#00AA0055,#00AA0055,#00AA0055} )
+		setHandler( ParentID, w32HClose, routine_id("hor_close") )
+	end if
+
+	newCntlID = create( Window, "", ParentID, 0, 0, 0, 0, {WS_CHILD,WS_VISIBLE} )
+	setMousePointer ( newCntlID, SizeNSPointer )
+
+	manage( exStyle, newCntlID, {0,0}, {0,y}, {1.0,0}, {0,y+7} )
+	defineUserProperty( newCntlID, "GMID", 0 )
+	setUserProperty( newCntlID, "GMID", exStyle )
+
+	setHandler( newCntlID, w32HMouse, routine_id("hor_mouse_events") )
+
+	return( newCntlID )
+end function
+
+-- register the new control
+global constant HSplitter = requestUniqueID()
+registerXcontrol( HSplitter, routine_id("splitter_hor") )
+
+------------------------------------------------------------------------------------
+--  Version info:
+--
+--  1.0: initial release
+--
+--  1.1: Had some major problems with some Win32Lib functions regarding coordinate
+--     : spaces when ToolBars and/ or StatusBars were present. Added in extra code
+--     : to resolve the differences (Jonas Temple).
+------------------------------------------------------------------------------------

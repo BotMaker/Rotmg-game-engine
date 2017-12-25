@@ -1,0 +1,64 @@
+------------------------------------------------------------------------------------
+--  LimitSize v1.0  <eunexus@yahoo.com>
+--
+--  This software is free and may be used in any program or project,
+--  compiled or not, for any purpose as long as I am given due credit.
+------------------------------------------------------------------------------------
+--  If there are any comments, questions, concerns, (bugs *gasp*) please email me.
+------------------------------------------------------------------------------------
+
+without warning
+sequence hWndtoID		hWndtoID = {}
+sequence MinTrackSz		MinTrackSz = {}
+sequence MaxTrackSz		MaxTrackSz = {}
+sequence oldWinHandle	oldWinHandle = {}
+
+-- procedure: LS_SetLimits [win32 callback loop] -----------------------------------
+function LS_SetLimits( atom hWnd, atom Msg, atom wParam, atom lParam )
+	atom cntlID
+	cntlID = find( hWnd, hWndtoID )
+
+	if Msg = WM_GETMINMAXINFO then
+		poke4( lParam+24, MinTrackSz[cntlID][1] )
+		poke4( lParam+28, MinTrackSz[cntlID][2] )
+
+		poke4( lParam+32, MaxTrackSz[cntlID][1] )
+		poke4( lParam+36, MaxTrackSz[cntlID][2] )
+	
+	elsif Msg = WM_CLOSE then
+		oldWinHandle[ cntlID ] = w32Func( xSetWindowLong, {hWnd,GWL_WNDPROC,oldWinHandle[cntlID]} )
+	end if
+
+	return w32Func( xCallWindowProc, {oldWinHandle[cntlID],hWnd,Msg,wParam,lParam} )
+end function
+
+-- function: limitsize [creates a new limitsize control] ---------------------------
+global function limitsize( sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, atom style, atom exStyle )
+	MinTrackSz = resizeSeq( MinTrackSz, ParentID, 0 )
+	MaxTrackSz = resizeSeq( MaxTrackSz, ParentID, 0 )
+	hWndtoID = resizeSeq( hWndtoID, ParentID, 0 )
+	oldWinHandle = resizeSeq( oldWinHandle, ParentID, 0 )
+
+	if cx < 1 then cx = 9999 end if
+	if cy < 1 then cy = 9999 end if
+
+	MinTrackSz[ ParentID ] = { x, y }
+	MaxTrackSz[ ParentID ] = { cx, cy }
+
+	hWndtoID[ ParentID ] = getHandle( ParentID )
+
+	oldWinHandle[ ParentID ] = w32Func( xSetWindowLong, {getHandle(ParentID),GWL_WNDPROC, call_back(routine_id("LS_SetLimits"))} )
+	return ParentID
+end function
+
+-- register the new control
+global constant LimitSize = requestUniqueID()
+registerXcontrol( LimitSize, routine_id("limitsize") )
+
+------------------------------------------------------------------------------------
+--  Version info:
+--
+--  1.0: initial release
+--
+--	1.1: removed line in WM_CLOSE which prevented proper closing of the window on exit
+------------------------------------------------------------------------------------

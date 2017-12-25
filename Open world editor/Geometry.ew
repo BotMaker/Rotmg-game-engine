@@ -1,0 +1,151 @@
+------------------------------------------------------------------------------------
+--  Geometry Manager v1.4  <eunexus@yahoo.com>
+--
+--  This software is free and may be used in any program or project,
+--  compiled or not, for any purpose as long as I am given due credit.
+------------------------------------------------------------------------------------
+--  If there are any comments, questions, concerns, (bugs *gasp*) please email me.
+------------------------------------------------------------------------------------
+
+without warning
+sequence IDsManaged		IDsManaged = {}
+sequence PrevPlaced		PrevPlaced = {}
+
+constant
+gmLockWindowUpdate = registerw32Procedure( user32, "LockWindowUpdate", {C_LONG} )
+
+-- procedure: GM_Manager [win32 callback loop] -------------------------------------
+procedure GM_Manager( integer parentID, integer event, sequence params )
+	sequence newPos, attribs, classType, Rect
+    sequence Offset
+	integer width, height
+	atom Void
+    atom TRect
+
+    Offset = {0,0}
+    Rect = getClientRect( parentID )
+	classType = getControlInfo( parentID, {CONTROLINFO_class} )
+    if classType[1] != 0 then
+        if classType[1] = 11 then -- tab control
+            TRect = allocate( 16 )
+            poke4( TRect, Rect[1..4] )
+            Void = sendMessage( parentID, TCM_ADJUSTRECT, 0, TRect )
+            Rect = peek4u( {TRect,4} ) & Rect[5..6]
+            free( TRect )
+            Offset = Rect[1..2]
+            Rect[6] -= Rect[2]
+            Rect[4] -= Rect[2]
+            Rect[5] -= Rect[1]
+            Rect[3] -= Rect[1]
+            Rect[1..2] = {0,0}
+        elsif classType[1] = 1 then -- group control
+            Rect[2] += 12
+            Offset[2] += 12
+            Rect[4] -= 12
+            Rect[6] -= 12
+        end if
+    end if
+	params[2..3] = Rect[3..4]
+
+	if Rect[2] != 0 then
+		params[3] = Rect[6]
+	end if
+
+	if onResize[parentID] != -1 then
+		call_proc( onResize[parentID], params )
+	end if
+
+	if params[1] != SIZE_MINIMIZED then
+		newPos = repeat( 0, 6 )
+		if length(IDsManaged[parentID]) > 0 then
+			w32Proc( gmLockWindowUpdate, {parentID} )
+
+			for index = 1 to length(IDsManaged[parentID]) do
+				attribs = IDsManaged[parentID][index]
+				for index2 = 1 to 4 do
+					if attribs[index2+1][1] <= 1
+						then newPos[index2] = floor( params[and_bits(or_bits(xor_bits(index2,1),2),3)] * attribs[index2+1][1] )
+						else newPos[index2] = PrevPlaced[ attribs[index2+1][1] ][ index2+2-(index2>2)*4 ]
+					end if
+					newPos[index2] += attribs[index2+1][2]
+					PrevPlaced[ attribs[1] ][index2] = newPos[index2]
+				end for
+				newPos[5] = newPos[3] - newPos[1]
+				newPos[6] = newPos[4] - newPos[2]
+
+				setRect( attribs[1], newPos[1]+Offset[1], newPos[2]+Offset[2], newPos[5], newPos[6], True )
+				classType = getControlInfo( attribs[1], {CONTROLINFO_class} )
+				if classType[1] = 2 then -- 2 = COMBO
+					Void = sendMessage( attribs[1], CB_SETDROPPEDWIDTH, newPos[5], 0 )
+				else
+				end if
+			end for
+			w32Proc( gmLockWindowUpdate, {0} )
+		end if
+	end if
+end procedure
+
+-- function: geometry [creates a new geometry manager] -----------------------------
+global function geometry( sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, atom style, atom exStyle )
+	IDsManaged = resizeSeq( IDsManaged, ParentID, {} )
+	setHandler( ParentID, w32HResize, routine_id("GM_Manager") )
+
+	return ParentID
+end function
+
+-- procedure: manage [adds position information into the IDsManaged sequence] ------
+global procedure manage( atom IDMIndex, atom controlID, sequence Left, sequence Top, sequence Right, sequence Bottom )
+	PrevPlaced = resizeSeq( PrevPlaced, controlID, {0,0,0,0} )
+
+	for IDsIter = 1 to length(IDsManaged[IDMIndex]) do
+		if IDsManaged[IDMIndex][IDsIter][1] = controlID then
+			IDsManaged[IDMIndex][IDsIter] = { controlID, Left, Top, Right, Bottom }
+			return
+		end if
+	end for	
+
+	IDsManaged[ IDMIndex ] &= {{ controlID, Left, Top, Right, Bottom }}
+end procedure
+
+-- procedure: manage_now [forces all the managed windows to be redrawn]-------------
+global procedure manage_now( atom IDMIndex )
+	sequence Rect
+
+	Rect = getClientRect( IDMIndex )
+	Rect = { 0, Rect[3] - Rect[1], Rect[6] + Rect[2] }
+	GM_Manager( IDMIndex, w32HResize, Rect )
+end procedure
+
+-- register the new control
+global constant Geometry = requestUniqueID()
+registerXcontrol( Geometry, routine_id("geometry") )
+
+------------------------------------------------------------------------------------
+--  Version info:
+--
+--  1.0: initial release
+--
+--  1.1: Suggested ability for the redefinition of managed children (Matt Lewis).
+--     : suggested new global function to force a redraw (Matt Lewis).
+--
+--  1.2: I just now realized in moving from version 0.5 to current that I had
+--     : optimized away the need for the create function in geometry.
+--
+--  1.3: Suggested ability to restrict the parent windows minimum width and height.
+--     : Created LimitSize control to control resizing (Jonas Temple).
+--
+--  1.4: Noticed my handler was preventing onResize for occuring on parent.  This
+--     : might be intentional on Win32Libs part but I think it needs to still be
+--     : called in case something needs to resize but not be a part of the manager.
+--
+--	1.5: Windows bug regarding combo box drop down lists not resizing properly.
+--	   : Added code to handle this special case (Jonas Temple).
+--
+--	1.6: Added in changes (which were nice too!) by Phil Russell which should
+--	   : reduce flicker in many cases and allows integration into his grid control.
+--
+--	1.7: Problems regarding a couple of the Win32Lib functions.  Added extra code
+--	   : to resolve differences (Jonas Temple).
+--
+--  1.8: Fixed positional issues with Group and Tab controls.  (CKLester & Jonas)
+------------------------------------------------------------------------------------

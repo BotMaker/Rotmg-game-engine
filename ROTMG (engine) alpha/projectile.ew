@@ -1,0 +1,74 @@
+sequence class_list,class_freelist,projectile_freelist
+class_list={}
+class_freelist={}
+projectile_freelist={}
+
+global constant projectile_x = 1
+global constant projectile_y = 2
+global constant projectile_angle = 3
+global constant projectile_start_time = 4
+global constant projectile_bullet_id = 5
+global constant projectile_type = 6
+
+
+global function projectile_new()
+  integer handle
+  if length(class_freelist)>0 then
+    handle= class_freelist[1]
+    class_freelist = class_freelist[2..length(class_freelist)]
+  else
+    class_list= append(class_list,{})
+	projectile_freelist= append(projectile_freelist,{})
+    handle=length(class_list)
+  end if
+
+  class_list[handle]={}
+  projectile_freelist[handle]={}
+
+  return handle
+end function
+
+global function projectile_enter(integer handle,atom x, atom y, atom angle, atom start_time, integer  bullet_id, integer ctype)
+integer index
+  if length(projectile_freelist[handle])>0 then
+    index=projectile_freelist[handle][1]
+	projectile_freelist[handle] = projectile_freelist[handle][2..length(projectile_freelist[handle])]
+	class_list[handle][index]={x,y,angle,start_time,bullet_id,ctype}
+	return index
+  else
+    class_list[handle]=append(class_list[handle],{x,y,angle,start_time,bullet_id,ctype})
+	return length(class_list[handle])
+  end if
+
+  
+end function
+
+global function projectile_get_list(integer handle)
+  return class_list[handle]
+end function
+
+global function projectile_get_x(integer handle,integer index)
+  return class_list[handle][index][projectile_x]
+end function
+
+global function projectile_get_y(integer handle,integer index)
+  return class_list[handle][index][projectile_y]
+end function
+
+global procedure projectile_set_position(integer handle,integer index, atom x, atom y)
+  class_list[handle][index][projectile_x]=x
+  class_list[handle][index][projectile_y]=y
+end procedure
+
+
+global procedure projectile_free(integer handle, integer index)
+  class_list[handle][index]={}
+  projectile_freelist[handle]&=index
+end procedure
+
+
+global procedure projectile_delete(integer handle)
+  class_list[handle]={}
+  projectile_freelist[handle]={}
+  class_freelist =append(class_freelist, handle)
+end procedure

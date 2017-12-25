@@ -1,0 +1,1879 @@
+#Version 0.21.1
+#Counter: 39
+#WinCounter: 3
+#Window 1
+#TabInfo
+TabText: Layer 0
+TabRenamed: 0
+TabNumber: 0
+TabsetLayer: 0
+#Control: Window1
+X       : 0
+Y       : 0
+CX      : 636
+CY      : 490
+ControlLayer: 0
+Title   : Open World Editor
+Class   : Window
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+BkColor : 0
+SystemBkColor : BTNFACE
+EnableC : 1
+Style   : 0
+TypStyle: 
+ExStyle : 0
+Local : 1
+LastEditorEvent : 1
+
+#Proc: (General)
+include euallegro.ew as allegro
+include reg.ew
+include win32dib.ew
+include xControls.ew
+include toolbar.ew
+include picture_button.ew
+
+include tinyxml.ew
+global atom doc
+doc= tinyxml_document()
+include "ground xml.ew"
+include "xml all.ew"
+
+--global sequence mapdata,objectdata
+--mapdata={}
+--objectdata={}
+
+include wmap.ew
+
+procedure map_load()
+    integer fn,char1,char2,char3,char4,width,height,count,xx,yy,object_handle,object_type
+
+
+
+  fn=open("mapdata.txt","rb")
+  char1=getc(fn)
+  char2=getc(fn)
+  width=(char2*256)+char1
+  char1=getc(fn)
+  char2=getc(fn)
+  height=(char2*256)+char1
+
+  ?width
+  ?height
+
+  for y=1 to height do
+    mapdata=append(mapdata,repeat(0,width))
+    objectdata=append(objectdata,repeat(0,width))
+    for x=1 to width do
+      char1=getc(fn)
+      char2=getc(fn)
+      mapdata[y][x]=(char2*256)+char1
+      if mapdata[y][x]=0 then
+       --puts(1,"found\n")
+      end if
+    end for
+  end for
+  close(fn)
+
+
+  fn=open("mapobjects.txt","rb")
+  char1=getc(fn)
+  char2=getc(fn)
+  char3=getc(fn)
+  char4=getc(fn)
+  count=bytes_to_int({char1,char2,char3,char4})
+  puts(1,"map load count\n")
+  ?count
+  for i=1 to count do
+    char1=getc(fn)
+    char2=getc(fn)
+    object_type=(char2*256)+char1
+
+  	char1=getc(fn)
+    char2=getc(fn)
+    xx=(char2*256)+char1
+    char1=getc(fn)
+    char2=getc(fn)
+    yy=(char2*256)+char1
+    --object_handle=object_enter(objectlist,xx,yy,1000+i,object_type , {})
+    --hash_insert(hashlist,hash_index(1000+i),1000+i,object_handle )
+    --?object_type
+    if objectdata[yy][xx]!=0 then
+    ?objectdata[yy][xx]	
+    end if
+    objectdata[yy][xx]=object_type
+  end for
+  close(fn)
+end procedure
+--map_load()
+wmap_load("nexus.wmap")
+--wmap_load("world1.wmap")
+
+
+
+
+
+
+procedure map_save()
+integer fn,object_type,count,xx,yy
+sequence bytes,object_list
+fn=open("mapdata.txt","wb")
+  --
+  bytes=int_to_bytes(128)
+  puts(fn, bytes[1])
+  puts(fn, bytes[2])
+  bytes=int_to_bytes(128)
+  puts(fn, bytes[1])
+  puts(fn, bytes[2])
+  for y=1 to 128 do
+  	for x=1 to 128 do
+  	  bytes=int_to_bytes(mapdata[y][x])
+  	  puts(fn, bytes[1])
+      puts(fn, bytes[2])
+  	end for
+  end for
+close(fn)
+
+fn=open("mapobjects.txt","wb")
+ count=0
+
+
+ for y=1 to 128 do
+  	for x=1 to 128 do
+  	  if objectdata[y][x]!=0 then
+  	  	count+=1
+  	  end if
+
+  	end for
+  end for
+
+ --?count
+ bytes=int_to_bytes(count)
+ puts(fn, bytes[1])
+ puts(fn, bytes[2])
+
+  for y=1 to 128 do
+  	for x=1 to 128 do
+  	  if objectdata[y][x]!=0 then
+  	    bytes=int_to_bytes(objectdata[y][x])
+  	    puts(fn, bytes[1])
+        puts(fn, bytes[2])
+
+        bytes=int_to_bytes(x)
+  	    puts(fn, bytes[1])
+        puts(fn, bytes[2])
+
+        bytes=int_to_bytes(y)
+  	    puts(fn, bytes[1])
+        puts(fn, bytes[2])
+  	  end if
+  	end for
+  end for
+
+ close(fn)
+end procedure
+
+
+
+
+
+--fix a problem with the ide and the vertacl spliter cwindow
+IDEFlags = classDefaults(Window, { {1, {WS_SYSMENU}},{2, {WS_EX_DLGMODALFRAME}} } )--
+
+
+constant window_titlebar_height = getSystemMetrics ( SM_CYCAPTION )
+constant window_menu_height = getSystemMetrics ( SM_CYMENU )
+constant window_hscrollbar_width = getSystemMetrics ( SM_CXVSCROLL )
+constant window_vscrollbar_height = getSystemMetrics ( SM_CYVSCROLL )
+constant window_border_width = getSystemMetrics ( SM_CXFRAME )
+constant window_border_height = getSystemMetrics ( SM_CYFRAME )
+constant window_toolbar_height = 33
+
+constant window_all_height=window_titlebar_height+window_menu_height+window_toolbar_height+(getSystemMetrics ( SM_CYFRAME )*2)
+
+function real(sequence string)
+sequence temp
+temp=value(string)
+return temp[2]
+end function
+
+procedure centerwindow(integer win)
+integer width,height,window_width,window_height
+sequence size
+    size=getCtlSize(win)
+    window_width=size[1]
+    window_height=size[2]
+    width=w32Func(xGetSystemMetrics,{SM_CXSCREEN})
+    height=w32Func(xGetSystemMetrics,{SM_CYSCREEN})
+    setRect( win,floor((width/2))-floor((window_width/2)) ,floor((height/2))-floor((window_height/2))-32, window_width, window_height, 0 )
+end procedure
+
+function rgb2( integer r, integer g, integer b )
+    return makecol(r,g,b)
+end function
+
+function get_file_fullname_part(sequence fname)
+    for i=length(fname) to 1 by -1 do
+    	if fname[i]='\\' then
+    	   return fname[i+1..length(fname)]
+    	end if
+    end for
+    return fname
+end function
+
+function get_file_name_part(sequence fname)
+    for i=length(fname) to 1 by -1 do
+    	if fname[i]='\\' then
+    	   for j=length(fname) to i by -1 do
+    	   	  if fname[j]='.' then
+    	   	  	return fname[i+1..j-1]
+    	   	  end if
+    	   end for
+    	   return fname[i+1..length(fname)]
+    	end if
+    end for
+    --maybe theres no path just a name
+    for i=length(fname) to 1 by -1 do
+    	if fname[i]='.' then
+    	   return fname[1..i-1]
+    	end if
+    end for
+end function
+
+function file_exsist(sequence fname)
+  integer fn
+  fn=open(fname,"r")
+  if fn!=-1  then
+    close(fn)
+  	return 1
+  end if
+  return 0
+end function
+
+function get_file_ext_part(sequence fname)
+    for i=length(fname) to 1 by -1 do
+    	if fname[i]='.' then
+    	   return lower(fname[i+1..length(fname)])
+    	end if
+    end for
+end function
+
+function get_file_path_part(sequence fname)
+    for i=length(fname) to 1 by -1 do
+    	if fname[i]='\\' then
+    		return fname[1..i]
+    	end if
+    end for
+end function
+
+
+function remove_line(sequence string, integer line)
+sequence temp
+integer len
+len=length(string)
+if line=1 then
+  return string[2..len]
+elsif line=len then
+  return string[1..len-1]
+else
+  temp=string[1..line-1]
+  return temp&string[line+1..len]
+end if
+end function
+
+sequence key_buffer
+key_buffer={}
+
+procedure key_add(integer scancode)
+integer found
+found=0
+  for i=1 to length(key_buffer) do
+    if key_buffer[i]=scancode then
+      found=1
+      exit
+    end if
+  end for
+  if found=0 then
+    key_buffer=append(key_buffer,scancode)
+  end if
+end procedure
+
+procedure key_remove(integer scancode)
+  for i=1 to length(key_buffer) do
+     if key_buffer[i]=scancode then
+       key_buffer=remove_line(key_buffer,i)
+       exit
+     end if
+  end for
+end procedure
+
+function key_check(integer scancode)
+   for i=1 to length(key_buffer) do
+     if key_buffer[i]=scancode then
+       return 1
+     end if
+  end for
+  return 0
+end function
+
+
+
+
+sequence working_dir
+working_dir=command_line()
+working_dir=get_file_path_part(working_dir[2])
+
+--=========================setup vspliter============================--
+constant
+GMID		= xControl( Geometry, "", Window1, 0, 0, 0, 0, 0, 0 ),
+vsplit		= xControl( VSplitter, "", 	Window1, 200, 0, 0, 0, 0, GMID )
+manage( GMID, CWindow2, {0,0}, {0,0}, {vsplit,0}, {1.0,-33} )
+manage( GMID, CWindow1, {vsplit,0}, {0,0}, {1.0,0}, {1.0,-33} )
+manage_now( GMID )
+
+--=========================end setup vspliter============================--
+
+
+--================================setup allegro============================--
+sequence tile_bitmaps
+global atom the_palette
+
+include texture.ew
+include spritesheet.ew
+
+sequence object_bitmaps
+object_bitmaps={}
+
+
+procedure init()
+integer spr	
+
+        spr=spritesheet_new(texture_load("data\\lofiEnvironment.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiEnvironment", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiEnvironment2.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiEnvironment2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiEnvironment3.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiEnvironment3", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj3.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj3", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+
+        --new for equipment bitmaps
+        spr=spritesheet_new(texture_load("data\\lofiChar8x8.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiChar8x8", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiChar28x8.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiChar28x8", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiChar216x16.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiChar216x16", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj2.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj4.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj4", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj5.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj5", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiObj6.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiObj6", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\playersSkins.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"playersSkins", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\players.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"players", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+
+        spr=spritesheet_new(texture_load("data\\lofiObjBig.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"lofiObjBig", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\lofiProjs.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"lofiProjs", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars8x8rBeach.bmp"),8,8)
+        object_bitmaps=append(object_bitmaps,{"chars8x8rBeach", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        --new
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dEncounters.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dEncounters", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dEncounters2.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dEncounters2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dMountains1.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dMountains1", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16dMountains2.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16dMountains2", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+        spr=spritesheet_new(texture_load("data\\chars16x16rEncounters.bmp"),16,16)
+        object_bitmaps=append(object_bitmaps,{"chars16x16rEncounters", spr,spritesheet_list[spr][4],spritesheet_list[spr][5]})
+
+
+        ground_set_sprite(object_bitmaps)
+        object_set_sprite(object_bitmaps)
+end procedure
+
+
+atom buffer,tile_buffer,tempsprtie,object_buffer
+object ret
+integer window_width,window_height,workspace_width,workspace_height,tile_window_width,tile_window_height
+integer view_left,view_top,tile_view_left,tile_view_top,object_view_top
+atom color_white,color_black,color_pink,color_green,color_blue,color_red
+
+integer tile_width,tile_height--,map_width,map_height
+integer tempx,tempy
+integer mapx,mapy
+integer view_mapx,view_mapy,view_mapx_width,view_mapy_height
+tile_width=32
+tile_height=32
+mapx=0
+mapy=0
+tempx=0
+tempy=0
+view_mapx=1
+view_mapy=1
+view_mapx_width=1
+view_mapy_height=1
+buffer=0
+window_width=640
+window_height=480
+workspace_width=1280--*10
+workspace_height=960--*10
+
+workspace_width=tile_width*map_width
+workspace_height=tile_height*map_height
+
+--map_width=2048--workspace_width/tile_width
+--map_height=2048--workspace_height/tile_height
+view_mapx_width=floor(window_width/tile_width)+1
+view_mapy_height=floor(window_height/tile_height)+1
+
+view_left=0
+view_top=0
+tile_bitmaps={}
+
+tile_buffer=0
+tile_view_left=0
+tile_view_top=0
+tile_window_width=300
+tile_window_height=300
+
+object_view_top=0
+
+object_buffer=0
+
+sequence tile_list
+tile_list={}
+
+for i=1 to map_height do
+  tile_list=append(tile_list , repeat(4,map_width))
+end for
+
+--load a game make tile file
+procedure load_tile_data(sequence fname)
+  integer fn,tempw,temph,width_tiles,height_tiles
+  integer left,top,x,y
+  fn=open(fname,"r")
+  tempw=real(gets(fn))
+  temph=real(gets(fn))
+
+  width_tiles=(tempw/tile_width)
+  height_tiles=(temph/tile_height)
+
+  for i=1 to height_tiles do
+    for j=1 to width_tiles do
+       left=real(gets(fn))
+       top=real(gets(fn))
+       x=real(gets(fn))
+       y=real(gets(fn))
+
+       if left=132 and top=33 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=4
+       elsif left=33 and top=33 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=1
+       elsif left=66 and top=33 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=2
+       elsif left=99 and top=33 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=3
+       elsif left=33 and top=66 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=5
+       elsif left=66 and top=66 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=6
+       elsif left=99 and top=66 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=7
+       elsif left=132 and top=66 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=8
+       elsif left=33 and top=99 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=9
+       elsif left=66 and top=99 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=10
+       elsif left=99 and top=99 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=11
+       elsif left=33 and top=132 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=12
+       elsif left=66 and top=132 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=13
+       elsif left=99 and top=132 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=14
+       elsif left=132 and top=132 then
+       	 tile_list[ (y/tile_height)+1][ (x/tile_width)+1 ]=15
+       end if
+
+    end for
+  end for
+
+  close(fn)
+end procedure
+
+
+procedure tiles_load()
+ sequence file_list
+ --puts(1,working_dir)
+ --&"\\tiles"working_dir
+ --puts(1,current_dir())
+ file_list=dir("tiles")
+ for i=3 to length(file_list) do
+ 	tile_bitmaps&=load_bitmap("tiles\\tile_"&sprint(i-3)&".bmp", the_palette)
+ end for
+
+  load_tile_data("tiles.txt")
+
+end procedure
+
+
+
+procedure startup_allegro()
+integer ret
+win_set_window(getHWND(Window1))
+the_palette = allocate_palette()
+if allegro_init()!= 0 then
+  puts(1,"init\n")
+end if
+if install_timer()!= 0 then
+  puts(1,"timer\n")
+end if
+ret=reserve_voices (4, -1)
+if install_sound (DIGI_AUTODETECT, MIDI_AUTODETECT, "")!= 0 then
+  puts(1,"install sound\n")
+end if
+set_color_depth(16)
+set_palette(the_palette)
+
+color_white=rgb2(255,255,255)
+color_black=rgb2(0,0,0)
+color_pink=rgb2(255,0,255)
+color_green=rgb2(0,255,0)
+color_blue=rgb2(0,0,255)
+color_red=rgb2(255,0,0)
+
+buffer=create_bitmap(window_width,window_height)
+clear_to_color(buffer,color_white)
+
+tempsprtie=create_bitmap(32,32)
+
+tiles_load()
+
+ init()
+
+end procedure
+
+procedure close_allegro()
+  destroy_palette(the_palette)
+  destroy_bitmap(buffer)
+
+  for i=1 to length(tile_bitmaps) do
+    destroy_bitmap(	tile_bitmaps[i] )
+  end for
+
+  allegro_exit()
+end procedure
+
+
+function wrap_between(integer v,integer min, integer max)
+
+	while v<min do
+		v+=max
+	end while
+	
+	while v>max do
+		v-=max
+	end while
+	
+	return v
+end function
+
+
+
+procedure draw_spritesheet_texture(integer j, integer i, integer spr, integer frameindex)
+integer width,height
+integer images_per_row
+atom tx,ty,tw,th
+
+  width=spritesheet_list[spr][spritesheet_sprite_width]
+  height=spritesheet_list[spr][spritesheet_sprite_height]
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0, images_per_row)*width
+  ty=floor((frameindex/images_per_row))*height
+
+
+stretch_blit(spritesheet_list[spr][1], tempsprtie , tx, ty, width,height, 0, 0, 32,32  )
+stretch_sprite(buffer,tempsprtie ,((tile_width*j)-tile_width)-view_left,((tile_height*i)-tile_height)-view_top, 32, 32)
+end procedure
+
+
+
+procedure draw_spritesheet_tile_selector(integer x, integer y, integer spr, integer frameindex)
+integer width,height
+integer images_per_row
+atom tx,ty,tw,th
+
+  width=spritesheet_list[spr][spritesheet_sprite_width]
+  height=spritesheet_list[spr][spritesheet_sprite_height]
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+  tx=wrap_between(frameindex,0, images_per_row)*width
+  ty=floor((frameindex/images_per_row))*height
+
+  stretch_blit(spritesheet_list[spr][1], tempsprtie , tx, ty, width,height, 0, 0, 32,32  )
+  stretch_sprite(tile_buffer,tempsprtie ,x, y, 32, 32)
+end procedure
+
+
+procedure draw_spritesheet_object_selector(integer x, integer y, integer spr, integer frameindex)
+integer width,height
+integer images_per_row
+atom tx,ty,tw,th
+
+  if spr<=0 then
+  	return
+  end if
+
+
+  width=spritesheet_list[spr][spritesheet_sprite_width]
+  height=spritesheet_list[spr][spritesheet_sprite_height]
+
+  images_per_row= spritesheet_list[spr][spritesheet_texture_images_per_row]
+
+
+tx=wrap_between(frameindex,0, images_per_row)*width
+ty=floor((frameindex/images_per_row))*height
+
+
+stretch_blit(spritesheet_list[spr][1], tempsprtie , tx, ty, width,height, 0, 0, 32,32  )
+stretch_sprite(object_buffer,tempsprtie ,x, y, 32, 32)
+end procedure
+
+--load_midi
+--play_midi(the_music, 1)
+--play_sample(the_sample, 255, pan, pitch, 1)
+--destroy_midi(the_music)
+--buffer=create_bitmap(view_width,view_height)
+--destroy_bitmap(buffer)
+--load_sample("buzzer.wav")
+--destroy_sample(buzzer_sfx)
+--load_bitmap("marty.bmp", the_palette)
+
+--================================end setup allegro==========================--
+
+
+
+
+--=========================load config=========================--
+
+sequence recent_info
+recent_info=repeat("",10)
+
+integer last_exit_code,crash_count
+last_exit_code=1-- set to defalut good exit
+crash_count=0
+
+constant MAIN_VERSION=0
+constant PATCH_VERSION=0
+constant PROGRAM_NAME="StarCraft Editor"
+constant PROGRAM_KEY="HKEY_CURRENT_USER\\SOFTWARE\\"&PROGRAM_NAME&"\\VERSION "&sprint(MAIN_VERSION)&"\\Settings"
+
+procedure load_config()
+object data
+integer x,y,width,height,max
+sequence size
+
+  if regKeyExists(PROGRAM_KEY)=1 then
+    width=regQueryValue(PROGRAM_KEY,"FormWidth",780)
+    height=regQueryValue(PROGRAM_KEY,"FormHeight",560)
+    x=regQueryValue(PROGRAM_KEY,"FormLeft",0)
+    y=regQueryValue(PROGRAM_KEY,"FormTop",0)
+    max=regQueryValue(PROGRAM_KEY,"FormMaximized",0)
+    last_exit_code=regQueryValue(PROGRAM_KEY,"ExitCode",0)
+    data=regSetValue(PROGRAM_KEY,"ExitCode",0)--reset to bad exit
+    crash_count=regQueryValue(PROGRAM_KEY,"CrashNumber",0)
+    for i=1 to length(recent_info) do
+      recent_info[i]=regQueryValue(PROGRAM_KEY,"Recent"&sprint(i),"")	
+    end for
+
+    setCtlPosition(Window1,x,y)
+    setCtlSize(Window1,width,height)
+    if max=1 then
+      setTimer(Window1,1001,1)	
+    end if
+  else
+    width=780
+    height=560
+    size=getCtlSize(Screen)
+    if size[1]<width or size[2]<height then
+      puts(1,"need a screen size of at least 800 and 600\n")	
+    end if
+    x=floor (size[1]/2) - floor(width/2)
+    if x<0 then
+      x=0	
+    end if
+    y=floor (size[2]/2) - floor(height/2)
+    if y<0 then
+      y=0	
+    end if
+    setCtlPosition(Window1,x,y)
+    setCtlSize(Window1,width,height)
+    data=regSetValue(PROGRAM_KEY,"FormWidth",width)
+    data=regSetValue(PROGRAM_KEY,"FormHeight",height)
+    data=regSetValue(PROGRAM_KEY,"FormLeft", x )
+    data=regSetValue(PROGRAM_KEY,"FormTop",  y )
+    data=regSetValue(PROGRAM_KEY,"FormMaximized",0)
+    data=regSetValue(PROGRAM_KEY,"ExitCode",0)
+    data=regSetValue(PROGRAM_KEY,"CrashNumber",crash_count)
+    for i=1 to length(recent_info) do
+      data=regSetValue(PROGRAM_KEY,"Recent"&sprint(i),"")	
+    end for
+  end if
+
+end procedure
+
+procedure save_config()
+object data
+sequence size,pos,size2
+
+    if isMaximized( Window1 ) then
+      data=regSetValue(PROGRAM_KEY,"FormMaximized",1)
+
+    else
+      if not isMinimized( Window1 ) then
+        size=getCtlSize(Window1)
+        pos=getPosition(Window1)
+      	data=regSetValue(PROGRAM_KEY,"FormWidth",size[1])
+        data=regSetValue(PROGRAM_KEY,"FormHeight",size[2])
+        size2=getCtlSize(Screen)
+        if pos[1]<0 or pos[1]>size[1] then
+          pos[1]=0
+        end if
+        if pos[2]<0 or pos[2]>size[2] then
+          pos[2]=0	
+        end if
+        data=regSetValue(PROGRAM_KEY,"FormLeft",pos[1])
+        data=regSetValue(PROGRAM_KEY,"FormTop",pos[2])
+      end if
+      data=regSetValue(PROGRAM_KEY,"FormMaximized",0)
+      data=regSetValue(PROGRAM_KEY,"CrashNumber",crash_count)
+    end if
+    data=regSetValue(PROGRAM_KEY,"ExitCode",1)--reset to good exit
+    for i=1 to length(recent_info) do
+      data=regSetValue(PROGRAM_KEY,"Recent"&sprint(i),recent_info[i])	
+    end for
+end procedure
+
+--=======================end load config=========================--
+
+
+--=======================error handlering========================--
+
+
+procedure program_bad_run()
+
+--crash_file("log\\err"&sprint(crash_count)&".txt")
+
+--crash_message("An unexpected error has occurred!\n" &
+--              "Please contact gaz.com\n" &
+--              "Do not delete the file \"ex.err\".\n")
+
+if last_exit_code=0 then
+  crash_count+=1
+  ret=regSetValue(PROGRAM_KEY,"CrashNumber",crash_count)
+  puts(1,PROGRAM_NAME&"crash last time it woz used sorry\n")	
+end if
+
+end procedure
+--=======================end error handlering========================--
+
+
+
+integer selected_tile,selected_tile_type
+selected_tile=1
+selected_tile_type=0
+
+sequence undo_list
+undo_list={}
+sequence groundlist
+groundlist=ground_get_list()
+--?length(groundlist)
+
+
+integer placement_mode,selected_object_type
+placement_mode=1
+selected_object_type=0
+--==============================CWindow4 events==============================--
+sequence objectlist
+objectlist=object_get_list()
+ setWindowScrollRange ( CWindow4, SB_VERT, 0, floor(length(objectlist)/5), 1 )
+
+integer selected_object
+selected_object=1
+
+
+procedure cwindow4_paint()
+  atom hdc
+  integer count,xx,yy
+
+  hdc=getDC(CWindow4)
+  clear_to_color(object_buffer,rgb2(255,0,255))
+  xx=0
+  yy=0
+
+  count=0
+
+   for i=(object_view_top*5)+1 to length(objectlist) do
+  --for i=1 to length(groundlist) do
+
+    if sequence(object_delta(objectlist[i], object_animated)) then
+  	  draw_spritesheet_object_selector(xx,yy,object_delta_mod(objectlist[i],object_sprite),7*object_delta_mod(objectlist[i],object_indexx))
+  	else
+  	  draw_spritesheet_object_selector(xx,yy,object_delta_mod(objectlist[i],object_sprite),object_delta_mod(objectlist[i],object_indexx))
+    end if
+
+
+    if selected_object=i then
+       allegro:rect(object_buffer,xx+2-tile_view_left,yy+2,xx-4+tile_width-tile_view_left,yy-4+tile_height,color_white)	
+    end if
+    xx+=tile_width
+  	count+=1
+  	if count=5 then
+  		count=0
+  		xx=0
+  		yy+=tile_height
+  		--?i
+  	end if
+  	
+  end for
+
+  allegro:rect(object_buffer,0-tile_view_left,0,(tile_window_width-1)-tile_view_left,(tile_window_height-1),color_red)
+
+  blit_to_hdc(object_buffer,hdc,0,0,0,0,tile_window_width,tile_window_height)
+  releaseDC(hdc)
+end procedure
+
+procedure cwindow4_scroll()
+  object_view_top= getScrollPos( {CWindow4, SB_VERT} )
+
+  cwindow4_paint()
+end procedure
+
+procedure cwindow4_mouse(sequence params)
+integer xx,yy
+
+  integer numoftile,count,xxx,yyy
+
+  xxx=0
+  yyy=0
+  numoftile=floor(tile_window_width/tile_width)
+  count=0
+
+  xx=floor((params[2]+tile_view_left)/tile_width)+1
+  yy=floor( (params[3])/tile_height)
+
+  if params[1]=LeftDown then
+  	
+
+  --for i=1 to length(tile_bitmaps) do
+  for i=(object_view_top*5)+1 to length(objectlist) do
+    xxx+=1
+  	count+=1
+  	if xx=xxx and yy=yyy then
+  	  selected_object=i
+  	  selected_object_type=objectlist[i]
+  	  placement_mode=2
+  	  cwindow4_paint()
+      exit	
+   	end if
+  	if count=5 then
+  		count=0
+  		xxx=0
+  		yyy+=1
+  	end if
+  	
+  end for
+
+end if
+
+end procedure
+
+
+
+procedure cwindow4_resize()
+sequence size,pos
+ size=getCtlSize( CWindow2 )
+
+ --view width\height
+
+ pos=getPosition(CWindow4)
+ pos[2]+=window_border_height
+ tile_window_width=size[1]-(window_hscrollbar_width+window_border_width)
+ tile_window_height=size[2]-pos[2]
+
+ destroy_bitmap(object_buffer)
+
+ object_buffer=0--might catch a bug
+
+ if tile_window_width<1 then
+ 	tile_window_width=1
+ end if
+ if tile_window_height<1 then
+ 	tile_window_height=1
+ end if
+
+ object_buffer=create_bitmap(tile_window_width,tile_window_height)
+
+
+ --if (workspace_width-window_width)<=1 then
+ --  ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_HORZ	,3 } )
+ --else
+ --  ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_HORZ	,0 } )
+ --  setWindowScrollRange ( CWindow1, SB_HORZ, 0, (workspace_width-window_width)+(tile_width), tile_width)
+ --end if
+
+end procedure
+
+
+
+
+
+
+
+
+
+
+
+ --setScrollChange( {CWindow1,SB_VERT},  tile_height , 60 )
+ --setScrollChange( {CWindow1,SB_HORZ},  tile_height ,(workspace_height-window_height)+tile_height)
+--floor(length(groundlist)/5))
+ setWindowScrollRange ( CWindow3, SB_VERT, 0, floor(length(groundlist)/5), 1 )
+
+--==============================CWindow3 events==============================--
+procedure cwindow3_paint()
+  atom hdc
+  integer numoftile,count,xx,yy
+
+
+
+  hdc=getDC(CWindow3)
+  clear_to_color(tile_buffer,rgb2(255,0,255))
+  xx=0
+  yy=0
+  numoftile=floor(tile_window_width/tile_width)
+  count=0
+  --for i=1 to length(tile_bitmaps) do
+  for i=(tile_view_top*5)+1 to length(groundlist) do
+  --for i=1 to length(groundlist) do
+    draw_spritesheet_tile_selector(xx,yy,ground_delta_mod(groundlist[i],ground_sprite),ground_delta_mod(groundlist[i],ground_indexx))
+
+    if selected_tile=i then
+       allegro:rect(tile_buffer,xx+2-tile_view_left,yy+2,xx-4+tile_width-tile_view_left,yy-4+tile_height,color_white)	
+    end if
+    xx+=tile_width
+  	count+=1
+  	if count=5 then
+  		count=0
+  		xx=0
+  		yy+=tile_height
+  		--?i
+  	end if
+  	
+  end for
+
+
+  	
+  allegro:rect(tile_buffer,0-tile_view_left,0,(tile_window_width-1)-tile_view_left,(tile_window_height-1),color_red)
+
+  blit_to_hdc(tile_buffer,hdc,0,0,0,0,tile_window_width,tile_window_height)
+
+
+  releaseDC(hdc)
+end procedure
+
+procedure cwindow3_scroll()
+  tile_view_left=getScrollPos( {CWindow3, SB_HORZ} )
+  tile_view_top= getScrollPos( {CWindow3, SB_VERT} )
+  cwindow3_paint()
+end procedure
+
+integer tile_init
+
+tile_init=0
+
+procedure cwindow3_resize()
+sequence size,pos
+ size=getCtlSize( CWindow2 )
+
+ --view width\height
+
+ pos=getPosition(CWindow3)
+ pos[2]+=window_border_height
+ tile_window_width=size[1]-(window_hscrollbar_width+window_border_width)
+ tile_window_height=size[2]-pos[2]
+
+ destroy_bitmap(tile_buffer)
+
+ tile_buffer=0--might catch a bug
+
+ if tile_window_width<1 then
+ 	tile_window_width=1
+ end if
+ if tile_window_height<1 then
+ 	tile_window_height=1
+ end if
+
+ tile_buffer=create_bitmap(tile_window_width,tile_window_height)
+ --object_buffer=create_bitmap(tile_window_width,tile_window_height)
+
+  if tile_init=0 then
+  	    for i=1 to length(groundlist) do
+  	    --count+=1
+  	     if groundlist[i]=1 then
+  	     	selected_tile=i
+  	       selected_tile_type=groundlist[i]
+  	       --setWindowScrollRange ( CWindow3, SB_VERT, 0, , 1 )
+  	       setScrollPos({CWindow3, SB_VERT},floor(i/5)-1)
+  	       --cwindow3_paint()
+  	       cwindow3_scroll()
+  	       exit
+  	     end if
+  	    end for
+  	    tile_init=1
+  	
+  end if
+ --if (workspace_width-window_width)<=1 then
+ --  ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_HORZ	,3 } )
+ --else
+ --  ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_HORZ	,0 } )
+ --  setWindowScrollRange ( CWindow1, SB_HORZ, 0, (workspace_width-window_width)+(tile_width), tile_width)
+ --end if
+
+end procedure
+
+procedure cwindow3_mouse(sequence params)
+integer xx,yy
+
+  integer numoftile,count,xxx,yyy
+
+  xxx=0
+  yyy=0
+  numoftile=floor(tile_window_width/tile_width)
+  count=0
+
+  xx=floor((params[2]+tile_view_left)/tile_width)+1
+  yy=floor( (params[3])/tile_height)
+
+  if params[1]=LeftDown then
+  	
+
+  --for i=1 to length(tile_bitmaps) do
+  for i=(tile_view_top*5)+1 to length(groundlist) do
+    xxx+=1
+  	count+=1
+  	if xx=xxx and yy=yyy then
+  	  selected_tile=i
+  	  selected_tile_type=groundlist[i]
+  	  placement_mode=1
+  	  cwindow3_paint()
+      exit	
+   	end if
+  	if count=5 then
+  		count=0
+  		xxx=0
+  		yyy+=1
+  	end if
+  	
+  end for
+
+end if
+
+end procedure
+
+integer mouse_object_type,mouse_tile_type
+mouse_object_type=0
+mouse_tile_type=0
+
+--==============================CWindow1 events==============================--
+procedure cwindow1_paint()
+  atom hdc
+
+  hdc=getDC(CWindow1)
+  clear_to_color(buffer,color_black)
+
+
+
+  for i=view_mapy to view_mapy_height+view_mapy do
+  	for j=view_mapx to view_mapx_width+view_mapx do
+  	  --textout_ex(buffer,font, sprint(j)&" "&sprint(i), ((tile_width*j)-tile_width)-view_left , ((tile_height*i)-tile_height)-view_top, color_white ,-1)
+  	  if i<=map_height and j<=map_width then
+        --blit(tile_bitmaps[tile_list[i][j]],buffer,0,0,((tile_width*j)-tile_width)-view_left,((tile_height*i)-tile_height)-view_top,tile_width,tile_height)      	
+
+        if mapdata[i][j]!=0 then
+          draw_spritesheet_texture(j,i,ground_delta_mod(mapdata[i][j],ground_sprite), ground_delta_mod(mapdata[i][j],ground_indexx))
+        end if
+
+        if objectdata[i][j]>0 then
+          if sequence(object_delta(objectdata[i][j], object_animated)) then
+            draw_spritesheet_texture(j,i,object_delta_mod(objectdata[i][j],object_sprite), 7*object_delta_mod(objectdata[i][j],object_indexx))
+          else
+            draw_spritesheet_texture(j,i,object_delta_mod(objectdata[i][j],object_sprite), object_delta_mod(objectdata[i][j],object_indexx))
+          end if
+        end if
+
+
+      end if
+  	end for
+  end for
+
+  for i=0 to view_left+window_width by tile_width do
+    if i-view_left<window_width then
+      --line(buffer,i-view_left,0,i-view_left,window_height,color_white)
+    end if
+  end for
+  for j=0 to view_top+window_height by tile_height do
+    if j-view_top<window_height then
+       --line(buffer,0,j-view_top,window_width,j-view_top,color_white)	
+    end if
+  end for
+
+
+  allegro:rect(buffer,0-view_left,0-view_top,(workspace_width-1)-view_left,(workspace_height-1)-view_top,color_red)
+
+
+  rect(buffer, ((tile_width*mapx)-view_left)-tile_width, ((tile_height*mapy)-view_top)-tile_height, ((tile_width*mapx)-view_left), ((tile_height*mapy)-view_top), color_pink )
+
+  blit_to_hdc(buffer,hdc,0,0,0,0,window_width,window_height)
+  releaseDC(hdc)
+
+  setPenColor( toolbar1, Green )
+  drawRectangle( toolbar1, w32True, 300, 0, 800, 30 )
+  setPenPos( toolbar1, 300, 0  )
+  wPuts(toolbar1,"object "&sprint(mouse_object_type))
+
+  if placement_mode=1 then
+    setPenPos( toolbar1, 300, 16  )
+    wPuts(toolbar1,"placement mode: tile")--&sprint(placement_mode))
+  elsif placement_mode=2 then
+    setPenPos( toolbar1, 300, 16  )
+    wPuts(toolbar1,"placement mode: object")--&sprint(placement_mode))
+  end if
+
+  setPenPos( toolbar1, 450, 16  )
+  wPuts(toolbar1,"selected object: "&sprint(selected_object_type))
+
+  setPenPos( toolbar1, 550, 16  )
+  wPuts(toolbar1,"selected tile: "&sprint(selected_tile_type))
+
+  setPenPos( toolbar1, 600, 0  )
+  wPuts(toolbar1,"tile "&sprint(mouse_tile_type))
+
+
+
+end procedure
+
+procedure cwindow1_scroll()
+  view_left=getScrollPos( {CWindow1, SB_HORZ} )
+  view_top=getScrollPos( {CWindow1, SB_VERT} )
+  view_mapx=floor(view_left/tile_width)+1
+  view_mapy=floor(view_top/tile_height)+1
+  cwindow1_paint()
+end procedure
+
+ setScrollChange( {CWindow1,SB_HORZ},  tile_width ,(workspace_width-window_width)+(tile_width))
+ setScrollChange( {CWindow1,SB_VERT},  tile_height ,(workspace_height-window_height)+tile_height)
+
+procedure cwindow1_resize()
+sequence size,pos
+ size=getCtlSize( Window1 )
+
+ --view width\height
+ pos=getPosition(CWindow1)
+ pos[1]-=2
+ window_width=size[1]-(pos[1]+(window_border_width*2)+window_hscrollbar_width+window_border_width )
+ window_height=size[2]-(window_all_height+window_vscrollbar_height+window_border_height )
+ destroy_bitmap(buffer)
+
+ buffer=0--might catch a bug
+ if window_width>workspace_width then
+ 	window_width=workspace_width
+ end if
+ if window_height>workspace_height then
+ 	window_height=workspace_height
+ end if
+ if window_width<1 then
+ 	window_width=1
+ end if
+ if window_height<1 then
+ 	window_height=1
+ end if
+
+ buffer=create_bitmap(window_width,window_height)
+
+ view_mapx_width=floor(window_width/tile_width)+1
+ view_mapy_height=floor(window_height/tile_height)+1
+
+ --cwindow1 scroll bars
+ if view_left+window_width>workspace_width then	
+   setScrollPos( {CWindow1, SB_HORZ}, (view_left-(view_left+window_width-workspace_width)) )
+ end if
+ if view_top+window_height>workspace_height then
+   setScrollPos( {CWindow1, SB_VERT}, (view_top-(view_top+window_height-workspace_height)) )
+ end if
+
+
+ if (workspace_width-window_width)<=1 then
+   ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_HORZ	,3 } )
+ else
+   ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_HORZ	,0 } )
+   setWindowScrollRange ( CWindow1, SB_HORZ, 0, (workspace_width-window_width)+(tile_width)*map_width, tile_width)
+ end if
+ if (workspace_height-window_height)<=1 then
+   ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_VERT	,3 } )
+ else
+   ret=w32Func( xEnableScrollBar , { getHandle( CWindow1 ), SB_VERT	,0 } )
+   setWindowScrollRange ( CWindow1, SB_VERT, 0,  (workspace_height-window_height)+(tile_height)*map_height, tile_height)
+ end if
+
+
+end procedure
+
+integer mouse_left_pressed,mouse_right_pressed
+mouse_left_pressed=0
+mouse_right_pressed=0
+
+integer temptx,tempty
+temptx=0
+tempty=0
+
+procedure cwindow1_mouse(sequence params)
+integer xx,yy
+  xx=floor((params[2]+view_left)/tile_width)+1
+  yy=floor( (params[3]+view_top)/tile_height)+1
+  if xx>0 and xx<=map_width and yy>0 and yy<=map_height then
+    mapx=xx
+    mapy=yy
+    --if tempx!=mapx or tempy!=mapy then
+  	  tempx=mapx
+  	  tempy=mapy
+  	  cwindow1_paint()
+    --end if
+
+    if params[1]=LeftDown then
+      mouse_left_pressed=1
+      cwindow1_paint()
+    elsif params[1]=LeftUp then
+      mouse_left_pressed=0
+    end if
+
+    if params[1]=RightDown then
+      mouse_right_pressed=1
+      cwindow1_paint()
+    elsif params[1]=RightUp then
+      mouse_right_pressed=0
+    end if
+
+
+    mouse_object_type=objectdata[mapy][mapx]
+    mouse_tile_type=mapdata[mapy][mapx]
+
+   --if temptx!=mapx or tempty!=mapy then	
+    if mouse_left_pressed=1  then
+      --if mapdata[mapy][mapx]!=selected_tile_type then
+
+        --undo_list=append(undo_list,{mapx,mapy,tile_list[mapy][mapx]})
+        --tile_list[mapy][mapx]=selected_tile
+        if placement_mode=1 then
+          mapdata[mapy][mapx]=selected_tile_type
+        elsif placement_mode=2 then
+          objectdata[mapy][mapx]=selected_object_type
+        end if
+
+        --?selected_tile_type
+        cwindow1_paint()	
+        temptx=mapx
+        tempty=mapy
+      --end if
+    end if
+   --end if
+
+   if mouse_right_pressed=1 then
+   	 --if placement_mode=1 then
+       --mapdata[mapy][mapx]=0
+       for i=1 to length(groundlist) do
+  	    --count+=1
+  	     if groundlist[i]=mouse_tile_type then
+  	     	selected_tile=i
+  	       selected_tile_type=groundlist[i]
+  	       --setWindowScrollRange ( CWindow3, SB_VERT, 0, , 1 )
+  	       setScrollPos({CWindow3, SB_VERT},floor(i/5)-1)
+  	       --cwindow3_paint()
+  	       cwindow3_scroll()
+  	       exit
+  	     end if
+  	    end for
+  	
+     --elsif placement_mode=2 then
+       --objectdata[mapy][mapx]=0
+       for i=1 to length(objectlist) do
+  	    --count+=1
+  	     if objectlist[i]=mouse_object_type then
+  	     	selected_object=i
+  	       selected_object_type=objectlist[i]
+  	       --setWindowScrollRange ( CWindow3, SB_VERT, 0, , 1 )
+  	       setScrollPos({CWindow4, SB_VERT},floor(i/5)-1)
+  	       --cwindow3_paint()
+  	       cwindow4_scroll()
+  	       exit
+  	     end if
+  	    end for
+     --end if
+   end if
+
+  end if
+
+end procedure
+
+
+
+--==========================main window menu setup====================--
+constant Menu_101 = createEx( Menu, "File", Window1, 0, 0, 0, 0, 0, 0 )
+constant MenuItem_102 = xControl( PicMenuItem, "New", Menu_101, 0, 0, 0, 0, 0, "images\\New.bmp" )
+constant MenuItem_103 = xControl( PicMenuItem, "Open", Menu_101, 0, 0, 0, 0, 0, "images\\Open.bmp" )
+
+constant Menu_121 = createEx( Menu, "Recent Files", Menu_101, 0, 0, 0, 0, 0, 0 )
+integer
+MenuItem_recent1,
+MenuItem_recent2,
+MenuItem_recent3,
+MenuItem_recent4,
+MenuItem_recent5,
+MenuItem_recent6,
+MenuItem_recent7,
+MenuItem_recent8,
+MenuItem_recent9,
+MenuItem_recent10
+
+procedure mainmenu_recent_item_onClick(integer self, integer event, sequence params)
+
+end procedure
+
+if length(recent_info[1])>0 then
+  MenuItem_recent1 = createEx( MenuItem, get_file_name_part(recent_info[1]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent1, w32HClick, routine_id("mainmenu_recent_item_onClick"))	
+end if
+if length(recent_info[2])>0 then
+  MenuItem_recent2 = createEx( MenuItem, get_file_name_part(recent_info[2]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent2, w32HClick, routine_id("mainmenu_recent_item_onClick"))
+end if
+if length(recent_info[3])>0 then
+  MenuItem_recent3 = createEx( MenuItem, get_file_name_part(recent_info[3]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent3, w32HClick, routine_id("mainmenu_recent_item_onClick"))	
+end if
+if length(recent_info[4])>0 then
+  MenuItem_recent4 = createEx( MenuItem, get_file_name_part(recent_info[4]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent4, w32HClick, routine_id("mainmenu_recent_item_onClick"))	
+end if
+if length(recent_info[5])>0 then
+  MenuItem_recent5 = createEx( MenuItem, get_file_name_part(recent_info[5]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent5, w32HClick, routine_id("mainmenu_recent_item_onClick"))	
+end if
+if length(recent_info[6])>0 then
+  MenuItem_recent6 = createEx( MenuItem, get_file_name_part(recent_info[6]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent6, w32HClick, routine_id("mainmenu_recent_item_onClick"))	
+end if
+if length(recent_info[7])>0 then
+  MenuItem_recent7 = createEx( MenuItem, get_file_name_part(recent_info[7]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent7, w32HClick, routine_id("mainmenu_recent_item_onClick"))	
+end if
+if length(recent_info[8])>0 then
+  MenuItem_recent8 = createEx( MenuItem, get_file_name_part(recent_info[8]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent8, w32HClick, routine_id("mainmenu_recent_item_onClick"))	
+end if
+if length(recent_info[9])>0 then
+  MenuItem_recent9 = createEx( MenuItem, get_file_name_part(recent_info[9]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent9, w32HClick, routine_id("mainmenu_recent_item_onClick"))
+end if
+
+if length(recent_info[10])>0 then
+  MenuItem_recent10 = createEx( MenuItem, get_file_name_part(recent_info[10]), Menu_121, 0, 0, 0, 0, 0, 0 )
+  setHandler( MenuItem_recent10, w32HClick, routine_id("mainmenu_recent_item_onClick"))
+end if
+
+constant MenuItem_spacer1 = createEx( MenuItem, "", Menu_101, 0, 0, 0, 0, 0, 0 )
+constant MenuItem_104 = xControl( PicMenuItem, "Save", Menu_101, 0, 0, 0, 0, 0, "images\\Save.bmp" )
+constant MenuItem_105 = xControl( PicMenuItem, "Save As", Menu_101, 0, 0, 0, 0, 0, "images\\SaveAs.bmp" )
+constant MenuItem_spacer2 = createEx( MenuItem, "", Menu_101, 0, 0, 0, 0, 0, 0 )
+
+constant MenuItem_106 = createEx( MenuItem, "Settings", Menu_101, 0, 0, 0, 0, 0, 0 )
+constant MenuItem_spacer8 = createEx( MenuItem, "", Menu_101, 0, 0, 0, 0, 0, 0 )
+
+constant MenuItem_107 = xControl( PicMenuItem, "Exit", Menu_101, 0, 0, 0, 0, 0, "images\\Exit.bmp" )
+
+constant Menu_131 = createEx( Menu, "Edit", Window1, 0, 0, 0, 0, 0, 0 )
+
+
+procedure mainmenu_undo_onClick(integer self, integer event, sequence params)
+sequence data
+  if length(undo_list) then
+    data=undo_list[length(undo_list)]
+  	undo_list=undo_list[1..length(undo_list)-1]
+  	tile_list[ data[2] ][ data[1] ]=data[3]
+  	cwindow1_paint()
+  	--?length(undo_list)
+  end if	
+end procedure
+
+constant MenuItem_108 = createEx( MenuItem, "Undo", Menu_131, 0, 0, 0, 0, 0, 0 )
+setHandler( MenuItem_108, w32HClick, routine_id("mainmenu_undo_onClick"))	
+
+
+
+
+--==========================end main window menu setup====================--
+
+atom bmap_new,bmap_open,bmap_save,bmap_spacer,bmap_tile_empty,bmap_object_empty
+bmap_new=loadBitmapFromFile("images\\new_l.bmp")
+bmap_open=loadBitmapFromFile("images\\open_l.bmp")
+bmap_save=loadBitmapFromFile("images\\save_l.bmp")
+
+bmap_spacer=loadBitmapFromFile("images\\spacer.bmp")
+bmap_tile_empty=loadBitmapFromFile("images\\tile empty.bmp")
+bmap_object_empty=loadBitmapFromFile("images\\object empty.bmp")
+--===================================main window toolbar setup===============================--
+integer pic_button1
+--24*24--bitmap
+--29 button w
+--9 spacer w
+procedure toolbar_button_new_click(integer id)
+
+end procedure
+pic_button1=create_toolbar_button({toolbar1,1,0,bmap_new,routine_id("toolbar_button_new_click"),"New" })
+
+procedure toolbar_button_open_click(integer id)
+    sequence fname
+
+  fname=getOpenFileName(Window1,"",{ "World Map File", "*.wmap"})
+  if length(fname)>0 then
+    wmap_load(fname)
+    puts(1,fname)
+  end if
+
+
+end procedure
+pic_button1=create_toolbar_button({toolbar1,30,0,bmap_open,routine_id("toolbar_button_open_click"), "Open" })
+
+procedure toolbar_button_save_click(integer id)
+ret = message_box("Comfirm to save the map?","Open World Editor",MB_YESNO)
+
+  if ret=IDNO then
+    returnValue(1)
+    return
+  end if
+  map_save()
+end procedure
+pic_button1=create_toolbar_button({toolbar1,59,0,bmap_save,routine_id("toolbar_button_save_click"), "Save" })
+
+pic_button1=create_toolbar_button({toolbar1,88,0,bmap_spacer,-1,""})
+toolbar_button_set_enable(pic_button1,0)
+
+procedure toolbar_button_tile_empty_click(integer id)
+  selected_tile=1
+  selected_tile_type=0
+  placement_mode=1
+  cwindow1_paint()
+end procedure
+pic_button1=create_toolbar_button({toolbar1,100,0,bmap_tile_empty,routine_id("toolbar_button_tile_empty_click"), "Tile empty" })
+
+procedure toolbar_button_object_empty_click(integer id)
+  selected_object=1
+  selected_object_type=0
+  placement_mode=2
+  cwindow1_paint()
+end procedure
+pic_button1=create_toolbar_button({toolbar1,130,0,bmap_object_empty,routine_id("toolbar_button_object_empty_click"), "Object empty" })
+
+
+#EndProc
+
+#Proc: onClose
+procedure Window1_onClose (integer self, integer event, sequence params)--params is ()
+  ret = message_box("Do you wish to exit?","Open World Editor",MB_YESNO)
+
+  if ret=IDNO then
+    returnValue(1)
+    return
+  end if
+
+
+  save_config()
+  close_allegro()
+end procedure
+setHandler( Window1, w32HClose, routine_id("Window1_onClose"))
+#EndProc
+
+#Proc: onKeyDown
+procedure Window1_onKeyDown (integer self, integer event, sequence params)--params is ( atom scanCode, atom shift )
+  key_add(params[1])
+
+  if params[1]=VK_SPACE then
+  	mainmenu_undo_onClick(0, 0, {})
+  end if
+end procedure
+setHandler( Window1, w32HKeyDown, routine_id("Window1_onKeyDown"))
+#EndProc
+
+#Proc: onKeyUp
+procedure Window1_onKeyUp (integer self, integer event, sequence params)--params is ( int scanCode, int shift )
+  key_remove(params[1])
+end procedure
+setHandler( Window1, w32HKeyUp, routine_id("Window1_onKeyUp"))
+#EndProc
+
+#Proc: onOpen
+procedure Window1_onOpen (integer self, integer event, sequence params)--params is ()
+  startup_allegro()
+  centerwindow(Window1)
+  setCtlPosition(CWindow1,200,window_toolbar_height)
+  setCtlPosition(CWindow2,0,window_toolbar_height)
+  setCtlPosition(CWindow3,0,200)
+  setCtlPosition(CWindow4,0,0)
+  load_config()
+  program_bad_run()
+end procedure
+setHandler( Window1, w32HOpen, routine_id("Window1_onOpen"))
+#EndProc
+
+#Proc: onResize
+procedure Window1_onResize (integer self, integer event, sequence params)--params is ( int style, int cx, int cy )
+  sequence size
+  size=getCtlSize(Window1)
+  --setCtlSize(CWindow1,size[1]-(200+(window_border_width*2)),size[2]-window_all_height)
+
+  setCtlPosition(CWindow3,0,floor(size[2]/2))
+
+  --setCtlSize(CWindow4,200,floor(size[2]/2))
+
+  setCtlSize(toolbar1,size[1],window_toolbar_height)
+
+end procedure
+setHandler( Window1, w32HResize, routine_id("Window1_onResize"))
+#EndProc
+
+#Proc: onTimer
+procedure Window1_onTimer (integer self, integer event, sequence params)--params is ( int timerId)
+  if params[1]=1001 then
+  	showWindow(Window1,SW_SHOWMAXIMIZED)
+    killTimer(Window1,1001)
+  end if
+end procedure
+setHandler( Window1, w32HTimer, routine_id("Window1_onTimer"))
+#EndProc
+
+#Control: CWindow2
+AWindow : 4
+X       : 0
+Y       : 50
+CX      : 200
+CY      : 400
+ControlLayer: 0
+Title   : 
+Class   : CWindow
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : CWindow4
+SeqChildName  : CWindow3
+Visible : 1
+EnableC : 1
+DefaultsClass : WS_SYSMENU
+Style   : WS_CHILD, WS_CLIPSIBLINGS
+TypStyle: w32or_all({...})
+ExStyle : WS_EX_STATICEDGE
+Local : 1
+LastEditorEvent : 12
+OrigTitle : CWindow3
+
+#Proc: onResize
+procedure CWindow2_onResize (integer self, integer event, sequence params)--params is ( int style, int cx, int cy )
+  sequence size,pos
+  size=getCtlSize(CWindow2)
+  pos=getPosition(CWindow3)
+  setCtlSize(CWindow3,size[1],size[2]-pos[2])
+  setCtlSize(CWindow4,size[1],floor(size[2]/2))
+end procedure
+setHandler( CWindow2, w32HResize, routine_id("CWindow2_onResize"))
+#EndProc
+
+#Control: CWindow1
+AWindow : 4
+X       : 200
+Y       : 50
+CX      : 430
+CY      : 400
+ControlLayer: 0
+Title   : 
+Class   : CWindow
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+EnableC : 1
+DefaultsClass : WS_SYSMENU
+Style   : WS_CHILD, WS_CLIPSIBLINGS, WS_VSCROLL, WS_HSCROLL
+TypStyle: w32or_all({...})
+ExStyle : WS_EX_STATICEDGE
+Local : 1
+LastEditorEvent : 12
+OrigTitle : CWindow2
+
+#Proc: onMouse
+procedure CWindow1_onMouse (integer self, integer event, sequence params)--params is ( int event, int x, int y, int shift, int wheelmove )
+  cwindow1_mouse(params)
+end procedure
+setHandler( CWindow1, w32HMouse, routine_id("CWindow1_onMouse"))
+#EndProc
+
+#Proc: onPaint
+procedure CWindow1_onPaint (integer self, integer event, sequence params)--params is ( int x1, int y1, int x2, int y2 )
+  setTimer(CWindow1,1001,0)
+end procedure
+setHandler( CWindow1, w32HPaint, routine_id("CWindow1_onPaint"))
+#EndProc
+
+#Proc: onScroll
+procedure CWindow1_onScroll (integer self, integer event, sequence params)--params is ( int pos )
+  cwindow1_scroll()
+end procedure
+setHandler( CWindow1, w32HScroll, routine_id("CWindow1_onScroll"))
+#EndProc
+
+#Proc: onResize
+procedure CWindow1_onResize (integer self, integer event, sequence params)--params is ( int style, int cx, int cy )
+  cwindow1_resize()
+end procedure
+setHandler( CWindow1, w32HResize, routine_id("CWindow1_onResize"))
+#EndProc
+
+#Proc: onTimer
+procedure CWindow1_onTimer (integer self, integer event, sequence params)--params is ( int timerId)
+  if params[1]=1001 then--paint window
+  	cwindow1_paint()
+  	killTimer(CWindow1,1001)
+  end if
+end procedure
+setHandler( CWindow1, w32HTimer, routine_id("CWindow1_onTimer"))
+#EndProc
+
+#Control: CWindow4
+AWindow : 4
+X       : 10
+Y       : 120
+CX      : 180
+CY      : 100
+ControlLayer: 0
+Title   : 
+Class   : CWindow
+Enabled : 0
+Checked : 0
+Parent  : CWindow2
+PClass  : CWindow
+SeqParentName  : CWindow2
+SeqParentClass  : CWindow
+SeqChildName  : 
+DirParent : CWindow2
+Visible : 1
+EnableC : 1
+DefaultsClass : WS_SYSMENU
+Style   : WS_CHILD, WS_CLIPSIBLINGS
+TypStyle: w32or_all({...})
+ExStyle : 0
+Local : 1
+LastEditorEvent : 12
+OrigTitle : CWindow38
+
+#Proc: onMouse
+procedure CWindow4_onMouse (integer self, integer event, sequence params)--params is ( int event, int x, int y, int shift, int wheelmove )
+   cwindow4_mouse(params)
+end procedure
+setHandler( CWindow4, w32HMouse, routine_id("CWindow4_onMouse"))
+#EndProc
+
+#Proc: onPaint
+procedure CWindow4_onPaint (integer self, integer event, sequence params)--params is ( int x1, int y1, int x2, int y2 )
+  setTimer(CWindow4,1001,0)
+end procedure
+setHandler( CWindow4, w32HPaint, routine_id("CWindow4_onPaint"))
+#EndProc
+
+#Proc: onScroll
+procedure CWindow4_onScroll (integer self, integer event, sequence params)--params is ( int pos )
+  cwindow4_scroll()
+end procedure
+setHandler( CWindow4, w32HScroll, routine_id("CWindow4_onScroll"))
+#EndProc
+
+#Proc: onResize
+procedure CWindow4_onResize (integer self, integer event, sequence params)--params is ( int style, int cx, int cy )
+  cwindow4_resize()
+end procedure
+setHandler( CWindow4, w32HResize, routine_id("CWindow4_onResize"))
+#EndProc
+
+#Proc: onTimer
+procedure CWindow4_onTimer (integer self, integer event, sequence params)--params is ( int timerId)
+  if params[1]=1001 then--paint window
+  	cwindow4_paint()
+  	killTimer(CWindow4,1001)
+  end if
+end procedure
+setHandler( CWindow4, w32HTimer, routine_id("CWindow4_onTimer"))
+#EndProc
+
+#Control: CWindow3
+AWindow : 4
+X       : 10
+Y       : 260
+CX      : 180
+CY      : 160
+ControlLayer: 0
+Title   : 
+Class   : CWindow
+Enabled : 0
+Checked : 0
+Parent  : CWindow2
+PClass  : CWindow
+SeqParentName  : CWindow2
+SeqParentClass  : CWindow
+SeqChildName  : 
+DirParent : CWindow2
+Visible : 1
+EnableC : 1
+DefaultsClass : WS_SYSMENU
+Style   : WS_CHILD, WS_CLIPSIBLINGS, WS_DLGFRAME
+TypStyle: {...}
+ExStyle : 0
+Local : 1
+LastEditorEvent : 13
+OrigTitle : CWindow36
+
+#Proc: onMouse
+procedure CWindow3_onMouse (integer self, integer event, sequence params)--params is ( int event, int x, int y, int shift, int wheelmove )
+  cwindow3_mouse(params)
+end procedure
+setHandler( CWindow3, w32HMouse, routine_id("CWindow3_onMouse"))
+#EndProc
+
+#Proc: onPaint
+procedure CWindow3_onPaint (integer self, integer event, sequence params)--params is ( int x1, int y1, int x2, int y2 )
+  setTimer(CWindow3,1001,0)
+end procedure
+setHandler( CWindow3, w32HPaint, routine_id("CWindow3_onPaint"))
+#EndProc
+
+#Proc: onScroll
+procedure CWindow3_onScroll (integer self, integer event, sequence params)--params is ( int pos )
+  cwindow3_scroll()
+end procedure
+setHandler( CWindow3, w32HScroll, routine_id("CWindow3_onScroll"))
+#EndProc
+
+#Proc: onResize
+procedure CWindow3_onResize (integer self, integer event, sequence params)--params is ( int style, int cx, int cy )
+  cwindow3_resize()
+end procedure
+setHandler( CWindow3, w32HResize, routine_id("CWindow3_onResize"))
+#EndProc
+
+#Proc: onTimer
+procedure CWindow3_onTimer (integer self, integer event, sequence params)--params is ( int timerId)
+  if params[1]=1001 then--paint window
+  	cwindow3_paint()
+  	killTimer(CWindow3,1001)
+  end if
+end procedure
+setHandler( CWindow3, w32HTimer, routine_id("CWindow3_onTimer"))
+#EndProc
+
+#Control: toolbar1
+AWindow : 7
+X       : 0
+Y       : 0
+CX      : 636
+CY      : 34
+ControlLayer: 0
+ToolRowCY: 34
+Title   : 
+Class   : ToolBar
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+EnableC : 1
+Style   : 
+TypStyle: 
+ExStyle : 0
+Local : 1
+LastEditorEvent : 14
+OrigTitle : ToolBar34
+
+#Proc: onMouse
+procedure toolbar1_onMouse (integer self, integer event, sequence params)--params is ( int event, int x, int y, int shift, int wheelmove )
+  mouse_toolbar(self,params)
+end procedure
+setHandler( toolbar1, w32HMouse, routine_id("toolbar1_onMouse"))
+#EndProc
+
+#Proc: onPaint
+procedure toolbar1_onPaint (integer self, integer event, sequence params)--params is ( int x1, int y1, int x2, int y2 )
+  draw_toolbar(self)
+end procedure
+setHandler( toolbar1, w32HPaint, routine_id("toolbar1_onPaint"))
+#EndProc
+

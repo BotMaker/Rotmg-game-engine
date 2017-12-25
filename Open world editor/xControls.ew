@@ -1,0 +1,59 @@
+------------------------------------------------------------------------------------
+--  xControl.ew v1.0  <eunexus@yahoo.com>
+--
+--  This software is free and may be used in any program or project,
+--  compiled or not, for any purpose as long as I am given due credit.
+------------------------------------------------------------------------------------
+--  If there are any comments, questions, concerns, (bugs *gasp*) please email me.
+------------------------------------------------------------------------------------
+
+without warning
+integer  uniqueID		uniqueID = 0
+sequence xControls		xControls = {}
+
+-- function: requestUniqueID [returns a unique number for custom controls] ---------
+global function requestUniqueID()
+	uniqueID += 1
+	return( uniqueID )
+end function
+
+-- procedure: registerXcontrol [registers a new custom control] --------------------
+global procedure registerXcontrol( integer ID, atom callback )
+	if length(xControls) < ID then
+		xControls &= repeat( 0, ID - length(xControls) )
+	end if
+		
+	xControls[ ID ] = callback
+end procedure
+
+-- function: xControl [creates a new custom control] -------------------------------
+global function xControl( integer Cntl, sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, object style, object exStyle )
+	atom newCntlID
+	newCntlID = 0
+
+	newCntlID = call_func( xControls[Cntl], {Text,ParentID,x,y,cx,cy,style,exStyle} )
+	return( newCntlID )
+end function
+
+-- function: resizeSeq [resizes Seq1 to Length] ------------------------------------
+global function resizeSeq( sequence Seq1, atom Length, object padWith )
+	if length(Seq1) < Length then
+		Seq1 &= repeat( padWith, Length - length(Seq1) )
+	end if
+	return( Seq1 )
+end function
+
+-- include all the custom controls
+include Geometry.ew
+include LimitSize.ew
+include Syntax.ew
+include VSplitter.ew
+include HSplitter.ew
+include PicMenu.ew
+
+------------------------------------------------------------------------------------
+--  Version info:
+--
+--  1.0: initial release
+--
+------------------------------------------------------------------------------------

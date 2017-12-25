@@ -1,0 +1,61 @@
+-- Win32Dib addon library: FreeDib 0.1.1
+-- FreeDib links FreeImage to Win32Dib, so you can load images from different fileformats.
+
+-- The FreeImage-library (DLL) is an Open Source Image Library: http://freeimage.sourceforge.net
+-- The idea for linking FreeImage to Win32Dib, and some of the code is from Mario Steele.
+
+-- Copyright (C) 2004-2005 Tommy Carlier
+-- tommy.carlier@telenet.be
+-- http://users.telenet.be/tommycarlier
+
+include w32dcore.ew   -- only the Win32Dib core-library is necessary
+
+global constant FreeDibVersion = {0, 1, 1, "17-October-2005"} -- {Major, Minor, Patch, Date}
+constant 
+	xfdSetDIBitsToDevice = registerw32Function(gdi32, "SetDIBitsToDevice", {C_POINTER, C_INT, C_INT, C_LONG, C_LONG, C_INT,  C_INT, C_UINT, C_UINT, C_POINTER, C_POINTER, C_UINT}, C_INT),
+	xfdFreeImage = registerw32Library("FreeImage.dll"),
+	xfiLoad = registerw32Function(xfdFreeImage, "_FreeImage_Load@12", {C_INT, C_POINTER, C_INT}, C_INT),
+	xfiUnload = registerw32Procedure(xfdFreeImage, "_FreeImage_Unload@4", {C_INT}),
+	xfiGetWidth = registerw32Function(xfdFreeImage, "_FreeImage_GetWidth@4", {C_INT}, C_INT),
+	xfiGetHeight = registerw32Function(xfdFreeImage, "_FreeImage_GetHeight@4", {C_INT}, C_INT),
+	xfiGetBits = registerw32Function(xfdFreeImage, "_FreeImage_GetBits@4", {C_INT}, C_POINTER),
+	xfiGetInfo = registerw32Function(xfdFreeImage, "_FreeImage_GetInfo@4", {C_INT}, C_POINTER),
+	xfiGetFileType = registerw32Function(xfdFreeImage, "_FreeImage_GetFileType@8", {C_POINTER, C_INT}, C_INT),
+	xfiGetFIFFromFilename = registerw32Function(xfdFreeImage, "_FreeImage_GetFIFFromFilename@4", {C_POINTER}, C_INT)
+
+constant FIF_UNKNOWN = -1
+
+global function loadFreeDib(sequence fileName)
+	--	Loads a bitmap from a file, returns 0 if the bitmap couldn't be read
+	atom img, dc, fileNameString
+	integer width, height, fileType
+	object dib
+	
+	fileNameString = allocate_string(fileName)
+	fileType = w32Func(xfiGetFileType, {fileNameString, 0})
+	if fileType = FIF_UNKNOWN then
+		fileType = w32Func(xfiGetFIFFromFilename, {fileNameString})
+		if fileType = FIF_UNKNOWN then
+			free(fileNameString)
+			return 0
+		end if
+	end if
+	
+	img = w32Func(xfiLoad, {fileType, fileNameString, 0})
+	free(fileNameString)
+	if not img then return 0 end if
+	
+	width = w32Func(xfiGetWidth, {img})
+	height = w32Func(xfiGetHeight, {img})
+	dib = newDib(width, height)
+	if atom(dib) then
+		w32Proc(xfiUnload, {img})
+		return 0
+	end if
+	
+	dc = getDC(dib[DibHandle])
+	VOID = w32Func(xfdSetDIBitsToDevice, {dc, 0, 0, width, height, 0, 0, 0, height, w32Func(xfiGetBits, {img}), w32Func(xfiGetInfo, {img}), 0})
+	releaseDC(dc)
+	w32Proc(xfiUnload, {img})
+	return dib
+end function

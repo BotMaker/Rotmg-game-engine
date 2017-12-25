@@ -1,0 +1,114 @@
+
+include machine.e
+
+sequence class_list,class_freelist
+class_list={}
+class_freelist={}
+constant input_buffer = 1
+
+global function input_stream_new()
+  integer handle
+  if length(class_freelist)>0 then
+    handle= class_freelist[1]
+    class_list[handle]={""}
+    class_freelist = class_freelist[2..length(class_freelist)]
+  else
+    class_list= append(class_list,{""})
+    handle=length(class_list)
+  end if
+
+  return handle
+end function
+
+global procedure input_stream_delete(integer handle)
+  class_list[handle]={}
+  class_freelist =append(class_freelist, handle)
+end procedure
+
+global function input_stream_peek(integer handle, integer pos)
+  return class_list[handle][input_buffer][pos]
+end function 
+
+global function input_stream_length(integer handle)
+  return length(class_list[handle][input_buffer])
+end function 
+
+global procedure input_stream_append(integer handle,sequence data)
+  class_list[handle][input_buffer]&=data
+end procedure
+
+global function input_stream_slice(integer handle, integer pos1, integer pos2)
+  return class_list[handle][input_buffer][pos1..pos2]
+end function 
+
+integer pos
+pos=1
+
+global procedure input_stream_set(integer handle,sequence data)
+  class_list[handle][input_buffer]=data
+  pos=1
+end procedure
+
+global function input_stream_get(integer handle)
+  return class_list[handle][input_buffer]
+end function 
+
+
+global function input_stream_readutf(integer handle)
+  integer len
+  sequence temp
+  len=bytes_to_int( {class_list[handle][input_buffer][2],class_list[handle][input_buffer][1],0,0} )+2
+  temp=class_list[handle][input_buffer][3..len]
+  class_list[handle][input_buffer]=class_list[handle][input_buffer][len+1..length(class_list[handle][input_buffer])]
+  return temp
+end function
+
+
+
+global function input_stream_readint(integer handle)
+  atom v
+  v=bytes_to_int( {class_list[handle][input_buffer][pos],class_list[handle][input_buffer][pos+1],class_list[handle][input_buffer][pos+2],class_list[handle][input_buffer][pos+3]} )
+  pos+=4
+  --class_list[handle][input_buffer]=class_list[handle][input_buffer][5..length(class_list[handle][input_buffer])]
+  return v
+end function
+
+global function input_stream_readfloat(integer handle)
+  atom v
+  v=float32_to_atom( {class_list[handle][input_buffer][4],class_list[handle][input_buffer][3],class_list[handle][input_buffer][2],class_list[handle][input_buffer][1]} )
+  class_list[handle][input_buffer]=class_list[handle][input_buffer][5..length(class_list[handle][input_buffer])]
+  return v
+end function
+
+global function input_stream_readshort(integer handle)
+atom v
+  v=bytes_to_int( {class_list[handle][input_buffer][pos],class_list[handle][input_buffer][pos+1],0,0} )
+  pos+=2
+  --class_list[handle][input_buffer]=class_list[handle][input_buffer][3..length(class_list[handle][input_buffer])]
+
+  return v
+end function
+
+global function input_stream_readfully(integer handle,integer len)
+  if len=0 then
+    return class_list[handle][input_buffer]
+  end if
+  return class_list[handle][input_buffer][1..len]
+end function
+
+global function input_stream_readbyte(integer handle)
+  integer temp
+
+  temp=class_list[handle][input_buffer][pos]
+  pos+=1
+  --class_list[handle][input_buffer]=class_list[handle][input_buffer][2..length(class_list[handle][input_buffer])]
+  return temp
+end function
+
+global function input_stream_readbool(integer handle)
+  integer temp
+
+  temp=class_list[handle][input_buffer][1]
+  class_list[handle][input_buffer]=class_list[handle][input_buffer][2..length(class_list[handle][input_buffer])]
+  return and_bits(temp,#1)
+end function

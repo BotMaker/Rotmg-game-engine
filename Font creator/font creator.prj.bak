@@ -1,0 +1,209 @@
+#Version 0.21.1
+#Counter: 5
+#WinCounter: 1
+#Window 1
+#TabInfo
+TabText: Layer 0
+TabRenamed: 0
+TabNumber: 0
+TabsetLayer: 0
+#Control: Window1
+X       : 0
+Y       : 0
+CX      : 625
+CY      : 521
+ControlLayer: 0
+Title   : Font creator
+Class   : Window
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+BkColor : 0
+SystemBkColor : BTNFACE
+EnableC : 1
+Style   : 0
+TypStyle: 
+ExStyle : 0
+Local : 1
+LastEditorEvent : 14
+
+#Proc: onPaint
+procedure Window1_onPaint (integer self, integer event, sequence params)--params is ( int x1, int y1, int x2, int y2 )
+  copyBlt(Window1,0,0,Pixmap1)
+end procedure
+setHandler( Window1, w32HPaint, routine_id("Window1_onPaint"))
+#EndProc
+
+#Control: Pixmap1
+AWindow : 30
+X       : 10
+Y       : 10
+CX      : 100
+CY      : 50
+ControlLayer: 0
+Title   : 
+Class   : Pixmap
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+EnableC : 1
+Style   : 
+TypStyle: 
+ExStyle : 0
+TabOrder : 1
+Local : 1
+OrigTitle : Bitmap2
+
+#Control: PushButton3
+AWindow : 30
+X       : 10
+Y       : 460
+CX      : 90
+CY      : 30
+ControlLayer: 0
+Title   : Get Font
+Class   : PushButton
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+EnableC : 1
+Style   : 
+TypStyle: 
+ExStyle : 0
+TabOrder : 2
+Local : 1
+LastEditorEvent : 3
+OrigTitle : PushButton3
+
+#Proc: onClick
+procedure PushButton3_onClick (integer self, integer event, sequence params)--params is ()
+  integer flags, points
+  atom color
+  sequence font,size
+  object result
+  sequence list1,font_width
+  integer x,y,width,height
+  integer real_width,real_height
+  x=0
+  y=0
+  width=0
+  height=0
+  list1={}
+  size={}
+  real_width=0
+  real_height=0
+  font_width={}
+  for i=32 to 126 do
+  	list1&=i
+  	font_width&=0
+  end for
+
+  result = getFontDialog( Window1 )
+  if sequence( result ) then
+
+    size=getCtlSize(Window1)
+    setCtlSize(Pixmap1, size[1]-10,size[2]-90 )
+    setPenColor(Pixmap1,rgb(255,0,255))
+    drawRectangle(Pixmap1,1,0,0,size[1]-10,size[2]-90)
+
+    font = result[1]
+    points = result[2]
+    flags  = result[3]
+    color  = result[4]
+    setFont( Pixmap1, font, points, flags )
+    setTextColor( Pixmap1 , color )
+    setPenPos( Pixmap1, 0, 0 )
+
+    width=getTextWidth ( Pixmap1, "W" )
+    height=getTextHeight (Pixmap1, "W" )
+    setTextColor(Pixmap1,color)
+    for i=32 to 126 do
+      font_width[i-31]=getTextWidth ( Pixmap1, {list1[i-31]} )
+      if font_width[i-31]=0 then
+      	font_width[i-31]=width
+      end if
+      setPenPos( Pixmap1, x, y )
+      wPuts( Pixmap1, {list1[i-31]} )
+      x+=width+4
+    end for
+    x=0
+    y=0
+    for i=32 to 126 do
+      x+=width+4
+    end for
+    real_width=x
+    real_height=height
+    setCtlSize(Pixmap1, real_width,real_height)
+    repaintWindow(Window1)
+    setText(text_font,font&"  "&sprint(real_width)&"   "&sprint(real_height))
+  end if
+
+end procedure
+setHandler( PushButton3, w32HClick, routine_id("PushButton3_onClick"))
+#EndProc
+
+#Control: text_font
+AWindow : 30
+X       : 110
+Y       : 460
+CX      : 180
+CY      : 30
+ControlLayer: 0
+Title   : Font
+Class   : LText
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+EnableC : 1
+Style   : 
+TypStyle: 
+ExStyle : 0
+TabOrder : 3
+Local : 1
+OrigTitle : LText4
+
+#Control: PushButton5
+AWindow : 30
+X       : 300
+Y       : 460
+CX      : 90
+CY      : 30
+ControlLayer: 0
+Title   : Font Color
+Class   : PushButton
+Enabled : 0
+Checked : 0
+Parent  : 
+PClass  : 
+SeqParentName  : 
+SeqParentClass  : 
+SeqChildName  : 
+Visible : 1
+EnableC : 1
+Style   : 
+TypStyle: 
+ExStyle : 0
+TabOrder : 4
+Local : 1
+OrigTitle : PushButton5
+

@@ -1,0 +1,3661 @@
+--
+-- euAllegro - A Allegro wrapper
+--
+-- version 0.3 ??/??/2006
+--
+-- Ray Smith
+-- http://RaymondSmith.com/euphoria
+--
+-- some code from Brian Broker
+--
+
+--*************************************************
+-- Includes
+--*************************************************
+--include wrapper.ew
+include wrapper.ew
+
+
+--*************************************************
+-- utility functions
+--*************************************************
+
+-----------------------------
+-- AL_ID
+-- function used to create allegro constants
+function AL_ID(integer a, integer b, integer c, integer d)
+   return a * #1000000 +
+          b * #10000 +
+          c * #100 +
+          d
+end function
+
+-----------------------------
+-- eu_true_false
+-- Allegro defines true as -1 and false as 0
+-- this converts them to 1 for true and 0 for false (more Euphoria like)
+function eu_true_false(integer tf)
+   if tf = 0 then
+      return 0
+   else
+      return 1
+   end if
+end function
+
+-----------------------------
+-- or_all
+-- from tk_maths.e
+function or_all( object pData )
+   atom lResult
+
+   if atom(pData) then
+      return pData
+   end if
+
+   if length(pData) = 0 then
+      return 0
+   end if
+
+   if length(pData) = 1 then
+      return or_all(pData[1])
+   end if
+
+   lResult = or_bits(pData[1], pData[2])
+   for i = 3 to length(pData) do
+      lResult = or_bits(lResult, pData[i])
+   end for
+
+   return lResult
+end function
+
+
+--*************************************************
+-- load library
+--*************************************************
+
+global atom AllegroLib
+AllegroLib = link_dll("alleg42.dll")
+
+
+--*************************************************
+-- all of these routines are organised similiar to
+-- the allegro manual. the order of routines is the
+-- same as the manual.
+--*************************************************
+
+
+--*************************************************
+-- general routines
+--*************************************************
+
+-----------------------------
+-- cpu globals
+global constant
+   CPU_ID       = #0001,
+   CPU_FPU      = #0002,
+   CPU_MMX      = #0004,
+   CPU_MMXPLUS  = #0008,
+   CPU_SSE      = #0010,
+   CPU_SSE2     = #0020,
+   CPU_3DNOW    = #0040,
+   CPU_ENH3DNOW = #0080,
+   CPU_CMOV     = #0100,
+   CPU_AMD64    = #0200,
+   CPU_IA64     = #0400,
+   CPU_SSE3     = #0800
+global constant
+   CPU_FAMILY_UNKNOWN     = 0,
+   CPU_FAMILY_I386        = 3,
+   CPU_FAMILY_I486        = 4,
+   CPU_FAMILY_I586        = 5,
+   CPU_FAMILY_I686        = 6,
+   CPU_FAMILY_ITANIUM     = 7,
+   CPU_FAMILY_EXTENDED    = 15,
+   CPU_FAMILY_POWERPC     = 18,
+-- 486
+   CPU_MODEL_I486DX       = 0,
+   CPU_MODEL_I486DX50     = 1,
+   CPU_MODEL_I486SX       = 2,
+   CPU_MODEL_I487SX       = 3,
+   CPU_MODEL_I486SL       = 4,
+   CPU_MODEL_I486SX2      = 5,
+   CPU_MODEL_I486DX2      = 7,
+   CPU_MODEL_I486DX4      = 8,
+-- Intel/586
+   CPU_MODEL_PENTIUM      = 1,
+   CPU_MODEL_PENTIUMP54C  = 2,
+   CPU_MODEL_PENTIUMOVERDRIVE = 3,
+   CPU_MODEL_PENTIUMOVERDRIVEDX4 = 4,
+   CPU_MODEL_CYRIX        = 14,
+   CPU_MODEL_UNKNOWN      = 15,
+-- AMD/586
+   CPU_MODEL_K5           = 0,
+   CPU_MODEL_K6           = 6,
+-- Intel/686
+   CPU_MODEL_PENTIUMPROA  = 0,
+   CPU_MODEL_PENTIUMPRO   = 1,
+   CPU_MODEL_PENTIUMIIKLAMATH = 3,
+   CPU_MODEL_PENTIUMII    = 5,
+   CPU_MODEL_CELERON      = 6,
+   CPU_MODEL_PENTIUMIIIKATMAI = 7,
+   CPU_MODEL_PENTIUMIIICOPPERMINE = 8,
+   CPU_MODEL_PENTIUMIIIMOBILE = 9,
+-- AMD/686
+CPU_MODEL_ATHLON          = 2,
+CPU_MODEL_DURON           = 3,
+-- Information when CPU_FAMILY is 15
+   CPU_MODEL_PENTIUMIV    = 0,
+   CPU_MODEL_XEON         = 2,
+   CPU_MODEL_ATHLON64     = 4,
+   CPU_MODEL_OPTERON      = 5,
+-- Information for Power PC processors
+-- these defines are taken from <mach-o/machine.h>
+   CPU_MODEL_POWERPC_601  = 1,
+   CPU_MODEL_POWERPC_602  = 2,
+   CPU_MODEL_POWERPC_603  = 3,
+   CPU_MODEL_POWERPC_603e = 4,
+   CPU_MODEL_POWERPC_603ev = 5,
+   CPU_MODEL_POWERPC_604  = 6,
+   CPU_MODEL_POWERPC_604e = 7,
+   CPU_MODEL_POWERPC_620  = 8,
+   CPU_MODEL_POWERPC_750  = 9,
+   CPU_MODEL_POWERPC_7400 = 10,
+   CPU_MODEL_POWERPC_7450 = 11
+global constant
+   my_cpu_vendor       = define_c_var(AllegroLib,"cpu_vendor"),
+   my_cpu_family       = define_c_var(AllegroLib,"cpu_family"),
+   my_cpu_model        = define_c_var(AllegroLib,"cpu_model"),
+   my_cpu_capabilities = define_c_var(AllegroLib,"cpu_capabilities")
+global integer cpu_family,
+               cpu_model,
+               cpu_capabilities
+global sequence cpu_vendor
+procedure cpu_globals()
+   cpu_vendor       = peek_sequence(my_cpu_vendor, 64)
+   cpu_family       = peek4u(my_cpu_family)
+   cpu_model        = peek4u(my_cpu_model)
+   cpu_capabilities = peek4u(my_cpu_capabilities)
+end procedure
+
+-----------------------------
+-- os globals
+
+-- OS type constants
+global constant
+   OSTYPE_UNKNOWN    = 0,
+   OSTYPE_WIN3       = AL_ID('W','I','N','3'),
+   OSTYPE_WIN95      = AL_ID('W','9','5',' '),
+   OSTYPE_WIN98      = AL_ID('W','9','8',' '),
+   OSTYPE_WINME      = AL_ID('W','M','E',' '),
+   OSTYPE_WINNT      = AL_ID('N','T',' ',' '),
+   OSTYPE_WIN2000    = AL_ID('W','2','K',' '),
+   OSTYPE_WINXP      = AL_ID('W','X','P',' '),
+   OSTYPE_OS2        = AL_ID('O','S','2',' '),
+   OSTYPE_WARP       = AL_ID('W','A','R','P'),
+   OSTYPE_DOSEMU     = AL_ID('D','E','M','U'),
+   OSTYPE_OPENDOS    = AL_ID('O','D','O','S'),
+   OSTYPE_LINUX      = AL_ID('T','U','X',' '),
+   OSTYPE_SUNOS      = AL_ID('S','U','N',' '),
+   OSTYPE_FREEBSD    = AL_ID('F','B','S','D'),
+   OSTYPE_NETBSD     = AL_ID('N','B','S','D'),
+   OSTYPE_IRIX       = AL_ID('I','R','I','X'),
+   OSTYPE_DARWIN     = AL_ID('D','A','R','W'),
+   OSTYPE_QNX        = AL_ID('Q','N','X',' '),
+   OSTYPE_UNIX       = AL_ID('U','N','I','X'),
+   OSTYPE_BEOS       = AL_ID('B','E','O','S'),
+   OSTYPE_MACOS      = AL_ID('M','A','C',' '),
+   OSTYPE_MACOSX     = AL_ID('M','A','C','X')
+global constant
+   my_os_type          = define_c_var(AllegroLib,"os_type"),
+   my_os_version       = define_c_var(AllegroLib,"os_version"),
+   my_os_revision      = define_c_var(AllegroLib,"os_revision"),
+   my_os_multitasking  = define_c_var(AllegroLib,"os_multitasking")
+global atom
+   os_type,
+   os_version,
+   os_revision,
+   os_multitasking
+procedure os_globals()
+   os_type = peek4u(my_os_type)
+   os_version = peek4u(my_os_version)
+   os_revision = peek4u(my_os_revision)
+   os_multitasking = eu_true_false(peek4s(my_os_multitasking))
+end procedure
+
+-----------------------------
+-- install_allegro
+global constant
+  SYSTEM_AUTODETECT = 0,
+  SYSTEM_NONE       = AL_ID('N','O','N','E')
+constant my_install_allegro = link_func(AllegroLib, "install_allegro", {C_INT, C_POINTER, C_POINTER}, C_INT)
+global function install_allegro(integer sys, atom errno_ptr, atom atexit)
+   integer ret
+
+   ret = c_func(my_install_allegro, {SYSTEM_AUTODETECT, errno_ptr, atexit})
+
+   os_globals()
+   cpu_globals()
+
+   return ret
+end function
+
+-- add by gareth mc daid --
+
+integer my_allocate_voice
+my_allocate_voice=link_func(AllegroLib, "allocate_voice",{C_INT}, C_INT)
+
+global function allocate_voice(integer sample)
+   return c_func(my_allocate_voice, {sample})
+end function
+
+integer my_deallocate_voice
+my_deallocate_voice=link_proc(AllegroLib, "deallocate_voice",{C_INT})
+ 
+global procedure deallocate_voice(integer sample)
+   c_proc(my_deallocate_voice,{sample } )
+end procedure
+
+
+integer my_set_window_close_button
+my_set_window_close_button = link_func(AllegroLib, "set_window_close_button",{C_INT}, C_INT)
+
+global function set_window_close_button(integer v)
+   return c_func(my_set_window_close_button, {v})
+end function
+
+integer my_set_window_close_hook
+my_set_window_close_hook = link_proc(AllegroLib, "set_window_close_hook",{C_POINTER}) 
+
+global procedure set_window_close_hook(integer proc)
+   c_proc(my_set_window_close_hook,{ call_back(proc)} )
+end procedure
+
+integer my_win_set_window
+my_win_set_window=link_proc(AllegroLib, "win_set_window",{C_POINTER})
+
+global procedure win_set_window(atom hwnd)
+   c_proc(my_win_set_window,{hwnd} )
+end procedure
+
+integer my_blit_to_hdc
+my_blit_to_hdc=link_proc(AllegroLib, "blit_to_hdc",{C_POINTER,C_POINTER,C_INT,C_INT,C_INT,C_INT,C_INT,C_INT})
+
+global procedure blit_to_hdc(atom bmp, atom hdc,integer sx,integer sy, integer dx, integer dy, integer w, integer h)
+  c_proc(my_blit_to_hdc,{bmp, hdc, sx,sy,dx,dy,w,h} )
+end procedure
+
+
+
+integer my_win_get_window
+my_win_get_window = link_func(AllegroLib, "win_get_window",{},C_POINTER) 
+
+global function win_get_window()
+   return c_func(my_win_get_window,{} )
+end function
+
+integer my_file_select_ex
+my_file_select_ex = link_func(AllegroLib, "file_select_ex",{C_POINTER,C_POINTER,C_POINTER,C_INT,C_INT,C_INT},C_INT) 
+
+global function file_select_ex(sequence message,sequence path,sequence ext,integer size,integer w,integer h)
+atom str1,str2,str3
+integer ret
+   str1= allocate_string(message)
+   str2= allocate_string(path)
+   str3= allocate_string(ext)
+   ret= c_func(my_file_select_ex,{str1,str2,str3,size,w,h} )
+   --free(str1)
+   --free(str2)
+   --free(str3)
+   return ret
+end function
+
+atom user32 
+user32=link_dll("user32.dll")
+
+integer xMoveWindow
+xMoveWindow = link_func(user32, "MoveWindow", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_LONG}, C_LONG)
+
+global function set_window_rect(atom hwn, integer x,integer y,integer width,integer height)
+  return c_func(xMoveWindow, {hwn,x,y,width,height,0})
+end function 
+
+--=====================--
+
+-----------------------------
+-- allegro_init
+atom my_errno_ptr
+my_errno_ptr=allocate(4)
+global function allegro_init()
+   return install_allegro(SYSTEM_AUTODETECT, my_errno_ptr, NULL)
+end function
+
+-----------------------------
+-- allegro_exit
+constant my_allegro_exit = link_proc(AllegroLib, "allegro_exit", {})
+global procedure allegro_exit()
+   c_proc(my_allegro_exit, {})
+   free(my_errno_ptr)
+end procedure
+
+-----------------------------
+-- allegro_id
+global constant allegro_id = peek_sequence( define_c_var(AllegroLib,"allegro_id"), 64)
+
+-----------------------------
+-- allegro_error
+-- errono details
+global constant
+   ALLEGRO_ERROR_SIZE = 256
+constant my_allegro_error= define_c_var(AllegroLib,"allegro_error")
+global function allegro_error()
+   return peek_sequence(my_allegro_error, ALLEGRO_ERROR_SIZE)
+end function
+
+-----------------------------
+-- allegro_message
+constant my_allegro_message = link_proc(AllegroLib, "allegro_message", {C_POINTER})
+global procedure allegro_message(sequence msg, sequence parms)
+   atom msg_ptr
+   sequence tmp
+
+   tmp = sprintf(msg, parms)
+   msg_ptr = allocate_string(tmp)
+   c_proc(my_allegro_message, {msg_ptr})
+   free(msg_ptr)
+end procedure
+
+-----------------------------
+-- set_window_title
+constant my_set_window_title = link_proc(AllegroLib, "set_window_title", {C_POINTER})
+global procedure set_window_title(sequence name)
+   atom name_addr
+
+   name_addr = allocate_string(name)
+   c_proc(my_set_window_title, {name_addr})
+   free(name_addr)
+end procedure
+
+-----------------------------
+-- set_close_button_callback
+constant my_set_close_button_callback = link_func(AllegroLib, "set_close_button_callback", {C_POINTER}, C_INT)
+global function set_close_button_callback(integer cb_routine_id)
+   return c_func(my_set_close_button_callback, {call_back(cb_routine_id)})
+end function
+
+-----------------------------
+-- desktop_color_depth
+constant my_desktop_color_depth = link_func(AllegroLib, "desktop_color_depth", {}, C_INT)
+global function desktop_color_depth()
+   return c_func(my_desktop_color_depth, {})
+end function
+
+-----------------------------
+-- get_desktop_resolution
+constant my_get_desktop_resolution = link_func(AllegroLib, "get_desktop_resolution", {C_POINTER, C_POINTER}, C_INT)
+global function get_desktop_resolution()
+   atom pw, ph
+   integer ret
+   integer w,h
+
+   pw=allocate(4)
+   ph=allocate(4)
+   ret = c_func(my_get_desktop_resolution, {pw, ph})
+   w=peek4u(pw)
+   h=peek4u(ph)
+   free(pw)
+   free(ph)
+
+   return {ret, w, h}
+end function
+
+-----------------------------
+-- check_cpu
+constant my_check_cpu = link_proc(AllegroLib, "check_cpu", {})
+global procedure check_cpu()
+   c_proc(my_check_cpu, {})
+   cpu_globals()
+end procedure
+
+
+--*************************************************
+-- Unicode routines
+--*************************************************
+-- TODO: All of Unicode routines
+
+-- Unicode constants
+global constant
+   U_ASCII           = AL_ID('A','S','C','8'),
+   U_ASCII_CP        = AL_ID('A','S','C','P'),
+   U_UNICODE         = AL_ID('U','N','I','C'),
+   U_UTF8            = AL_ID('U','T','F','8'),
+   U_CURRENT         = AL_ID('c','u','r','.')
+
+
+--*************************************************
+-- Configuration routines
+--*************************************************
+-- TODO: All of Configuration routines
+
+
+--*************************************************
+-- mouse routines
+--*************************************************
+
+global constant
+   mouse_driver     = define_c_var(AllegroLib,"mouse_driver")
+-- Mouse cursors
+global constant
+   MOUSE_CURSOR_NONE        = 0,
+   MOUSE_CURSOR_ALLEGRO     = 1,
+   MOUSE_CURSOR_ARROW       = 2,
+   MOUSE_CURSOR_BUSY        = 3,
+   MOUSE_CURSOR_QUESTION    = 4,
+   MOUSE_CURSOR_EDIT        = 5,
+   NUM_MOUSE_CURSORS        = 6
+
+-----------------------------
+-- install_mouse
+constant my_install_mouse = link_func(AllegroLib, "install_mouse", {}, C_INT)
+global function install_mouse()
+   return c_func(my_install_mouse,{})
+end function
+
+-----------------------------
+-- remove_mouse
+constant my_remove_mouse = link_proc(AllegroLib, "remove_mouse", {})
+global procedure remove_mouse()
+   c_proc(my_remove_mouse,{})
+end procedure
+
+-----------------------------
+-- poll_mouse
+constant my_poll_mouse = link_func(AllegroLib, "poll_mouse", {}, C_INT)
+global function poll_mouse()
+   return c_func(my_poll_mouse,{})
+end function
+
+-----------------------------
+-- mouse_needs_poll
+constant my_mouse_needs_poll = link_func(AllegroLib, "mouse_needs_poll", {}, C_INT)
+global function mouse_needs_poll()
+   return eu_true_false( c_func(my_mouse_needs_poll,{}) )
+end function
+
+-----------------------------
+-- enable_hardware_cursor
+constant my_enable_hardware_cursor = link_proc(AllegroLib, "enable_hardware_cursor", {})
+global procedure enable_hardware_cursor()
+   c_proc(my_enable_hardware_cursor, {})
+end procedure
+
+-----------------------------
+-- disable_hardware_cursor
+constant my_disable_hardware_cursor = link_proc(AllegroLib, "disable_hardware_cursor", {})
+global procedure disable_hardware_cursor()
+   c_proc(my_disable_hardware_cursor, {})
+end procedure
+
+-----------------------------
+-- select_mouse_cursor
+constant my_select_mouse_cursor = link_proc(AllegroLib, "select_mouse_cursor", {C_INT})
+global procedure select_mouse_cursor(integer c)
+   c_proc(my_select_mouse_cursor, {c})
+end procedure
+
+-----------------------------
+-- set_mouse_cursor_bitmap
+constant my_set_mouse_cursor_bitmap = link_proc(AllegroLib, "set_mouse_cursor_bitmap", {C_POINTER})
+global procedure set_mouse_cursor_bitmap(integer c, atom bmp)
+   c_proc(my_set_mouse_cursor_bitmap,{c, bmp})
+end procedure
+
+-----------------------------
+-- mouse_x
+constant my_mouse_x = link_var(AllegroLib, "mouse_x")
+global function mouse_x()
+   return peek4u(my_mouse_x)
+end function
+
+-----------------------------
+-- mouse_y
+constant my_mouse_y = link_var(AllegroLib, "mouse_y")
+global function mouse_y()
+   return peek4u(my_mouse_y)
+end function
+
+-----------------------------
+-- mouse_z
+constant my_mouse_z = link_var(AllegroLib, "mouse_z")
+global function mouse_z()
+   return peek4s(my_mouse_z)
+end function
+
+-----------------------------
+-- mouse_b
+constant my_mouse_b = link_var(AllegroLib, "mouse_b")
+global function mouse_b()
+   return peek4u(my_mouse_b)
+end function
+
+-----------------------------
+-- mouse_pos
+constant my_mouse_pos = link_var(AllegroLib, "mouse_pos")
+global function mouse_pos()
+   return peek4u(my_mouse_pos)
+end function
+
+-----------------------------
+-- mouse_sprite
+constant my_mouse_sprite = link_var(AllegroLib, "mouse_sprite")
+global function mouse_sprite()
+   return peek4u(my_mouse_sprite)
+end function
+
+-----------------------------
+-- mouse_x_focus
+constant my_mouse_x_focus = link_var(AllegroLib, "mouse_x_focus")
+global function mouse_x_focus()
+   return peek4u(my_mouse_x_focus)
+end function
+
+-----------------------------
+-- mouse_y_focus
+constant my_mouse_y_focus = link_var(AllegroLib, "mouse_y_focus")
+global function mouse_y_focus()
+   return peek4u(my_mouse_y_focus)
+end function
+
+-----------------------------
+-- show_mouse
+constant my_show_mouse = link_proc(AllegroLib, "show_mouse", {C_POINTER})
+global procedure show_mouse(atom mybmp)
+   c_proc(my_show_mouse,{mybmp})
+end procedure
+
+-----------------------------
+-- scare_mouse
+constant my_scare_mouse = link_proc(AllegroLib, "scare_mouse", {})
+global procedure scare_mouse()
+   c_proc(my_scare_mouse,{})
+end procedure
+
+-----------------------------
+-- scare_mouse_area
+constant my_scare_mouse_area = link_proc(AllegroLib, "scare_mouse_area", {C_INT, C_INT, C_INT, C_INT})
+global procedure scare_mouse_area(integer x, integer y, integer w, integer h)
+   c_proc(my_scare_mouse_area,{x, y, w, h})
+end procedure
+
+-----------------------------
+-- unscare_mouse
+constant my_unscare_mouse = link_proc(AllegroLib, "unscare_mouse", {})
+global procedure unscare_mouse()
+   c_proc(my_unscare_mouse,{})
+end procedure
+
+-----------------------------
+-- show_os_cursor
+constant my_show_os_cursor = link_func(AllegroLib, "show_os_cursor", {C_INT}, C_INT)
+global function show_os_cursor(integer c)
+   return c_func(my_show_os_cursor,{c})
+end function
+
+-----------------------------
+-- freeze_mouse_flag
+constant my_freeze_mouse_flag = link_var(AllegroLib, "freeze_mouse_flag")
+global procedure set_freeze_mouse_flag(integer flag)
+   poke4(my_freeze_mouse_flag, flag)
+end procedure
+
+global function get_freeze_mouse_flag()
+   return peek4u(my_freeze_mouse_flag)
+end function
+
+-----------------------------
+-- position_mouse
+constant my_position_mouse = link_proc(AllegroLib, "position_mouse", {C_INT, C_INT})
+global procedure position_mouse(integer x, integer y)
+   c_proc(my_position_mouse,{x, y})
+end procedure
+
+-----------------------------
+-- position_mouse_z
+constant my_position_mouse_z = link_proc(AllegroLib, "position_mouse_z", {C_INT})
+global procedure position_mouse_z(integer z)
+   c_proc(my_position_mouse_z,{z})
+end procedure
+
+-----------------------------
+-- set_mouse_range
+constant my_set_mouse_range = link_proc(AllegroLib, "set_mouse_range", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_mouse_range(integer x1, integer y1, integer x2, integer y2)
+   c_proc(my_set_mouse_range,{x1, y1, x2, y2})
+end procedure
+
+-----------------------------
+-- set_mouse_speed
+constant my_set_mouse_speed = link_proc(AllegroLib, "set_mouse_speed", {C_INT, C_INT})
+global procedure set_mouse_speed(integer x, integer y)
+   c_proc(my_set_mouse_speed,{x, y})
+end procedure
+
+-----------------------------
+-- set_mouse_sprite
+constant my_set_mouse_sprite = link_proc(AllegroLib, "set_mouse_sprite", {C_POINTER})
+global procedure set_mouse_sprite(atom mybmp)
+   c_proc(my_set_mouse_sprite,{mybmp})
+end procedure
+
+-----------------------------
+-- set_mouse_sprite_focus
+constant my_set_mouse_sprite_focus = link_proc(AllegroLib, "set_mouse_sprite_focus", {C_INT, C_INT})
+global procedure set_mouse_sprite_focus(integer x, integer y)
+   c_proc(my_set_mouse_sprite_focus,{x, y})
+end procedure
+
+-----------------------------
+-- get_mouse_mickeys
+constant my_get_mouse_mickeys = link_proc(AllegroLib, "get_mouse_mickeys", {C_POINTER, C_POINTER})
+global function get_mouse_mickeys()
+   atom px, py
+   atom x, y
+
+   px=allocate(4)
+   py=allocate(4)
+   c_proc(my_get_mouse_mickeys, {px, py})
+   x=peek4s(px)
+   y=peek4s(py)
+   free(px)
+   free(py)
+
+   return {x, y}
+end function
+
+-----------------------------
+-- mouse_callback
+constant my_mouse_callback = link_proc(AllegroLib, "mouse_callback", {C_POINTER})
+global procedure mouse_callback(integer cb_routine_id)
+   c_proc(my_mouse_callback,{call_back(cb_routine_id)})
+end procedure
+
+
+--*************************************************
+-- timer routines
+--*************************************************
+
+constant TIMERS_PER_SECOND = 1193181
+
+global constant
+   timer_driver     = define_c_var(AllegroLib,"timer_driver")
+
+-----------------------------
+-- install_timer
+constant my_install_timer = link_func(AllegroLib, "install_timer", {}, C_INT)
+global function install_timer()
+   return c_func(my_install_timer, {})
+end function
+
+-----------------------------
+-- remove_timer
+constant my_remove_timer = link_proc(AllegroLib, "remove_timer", {})
+global procedure remove_timer()
+   c_proc(my_remove_timer, {})
+end procedure
+
+-----------------------------
+-- install_int
+constant my_install_int = link_func(AllegroLib, "install_int", {C_POINTER, C_INT}, C_INT)
+global function install_int(integer proc, integer speed)
+   return c_func(my_install_int,{ call_back(proc), speed} )
+end function
+
+-----------------------------
+-- install_int_ex
+constant my_install_int_ex = link_func(AllegroLib, "install_int", {C_POINTER, C_INT}, C_INT)
+global function install_int_ex(integer proc, integer speed)
+   return c_func(my_install_int_ex,{call_back(proc), speed})
+end function
+
+-----------------------------
+-- SECS_TO_TIMER
+global function SECS_TO_TIMER( integer x )
+  return x*TIMERS_PER_SECOND
+end function
+
+-----------------------------
+-- MSECS_TO_TIMER
+global function MSEC_TO_TIMER( integer x )
+  return x*(TIMERS_PER_SECOND/1000)
+end function
+
+-----------------------------
+-- BPS_TO_TIMER
+global function BPS_TO_TIMER( integer x )
+  return TIMERS_PER_SECOND/x
+end function
+
+-----------------------------
+-- BPM_TO_TIMER
+global function BPM_TO_TIMER( integer x )
+  return (60*TIMERS_PER_SECOND)/x
+end function
+
+-----------------------------
+-- TODO: Timer routines:
+-- TODO: Macro LOCK_VARIABLE(variable_name);
+-- TODO: Macro LOCK_FUNCTION(function_name);
+-- TODO: do we nede some way to lock variables or functions? probably - demo sometimes crashes!
+
+-----------------------------
+-- remove_int
+constant my_remove_int = link_proc(AllegroLib, "remove_int", {C_POINTER})
+global procedure remove_int(atom proc)
+   c_proc(my_remove_int,{proc})
+end procedure
+
+-----------------------------
+-- install_param_int
+-- TODO: int install_param_int(void (*proc)(void *), void *param, int speed);
+
+-----------------------------
+-- install_param_int_ex
+-- TODO: int install_param_int_ex(void (*proc)(void *), void *param, int speed);
+
+-----------------------------
+-- remove_param_int
+-- TODO: void remove_param_int(void (*proc)(void *), void *param);
+
+-----------------------------
+-- retrace_count
+constant my_retrace_count = link_var(AllegroLib, "retrace_count")
+global function retrace_count()
+   return peek4u(my_retrace_count)
+end function
+
+-----------------------------
+-- rest
+constant my_rest = link_proc(AllegroLib, "rest", {C_INT})
+global procedure rest(integer wait_time)
+   c_proc(my_rest,{wait_time})
+end procedure
+
+-----------------------------
+-- rest_callback
+constant my_rest_callback = link_proc(AllegroLib, "rest_callback", {C_INT, C_POINTER})
+global procedure rest_callback(integer t, integer cb_routine_id)
+   c_proc(my_rest_callback,{t, call_back(cb_routine_id)})
+end procedure
+
+
+--*************************************************
+-- keyboard routines
+--*************************************************
+
+-- key shift constants
+global constant
+   KB_SHIFT_FLAG       = #0001,
+   KB_CTRL_FLAG        = #0002,
+   KB_ALT_FLAG         = #0004,
+   KB_LWIN_FLAG        = #0008,
+   KB_RWIN_FLAG        = #0010,
+   KB_MENU_FLAG        = #0020,
+   KB_SCROLOCK_FLAG    = #0100,
+   KB_NUMLOCK_FLAG     = #0200,
+   KB_CAPSLOCK_FLAG    = #0400,
+   KB_INALTSEQ_FLAG    = #0800,
+   KB_ACCENT1_FLAG     = #1000,
+   KB_ACCENT2_FLAG     = #2000,
+   KB_ACCENT3_FLAG     = #4000,
+   KB_ACCENT4_FLAG     = #8000
+
+-- key constants
+global constant
+   KEY_A           = 1,
+   KEY_B           = 2,
+   KEY_C           = 3,
+   KEY_D           = 4,
+   KEY_E           = 5,
+   KEY_F           = 6,
+   KEY_G           = 7,
+   KEY_H           = 8,
+   KEY_I           = 9,
+   KEY_J           = 10,
+   KEY_K           = 11,
+   KEY_L           = 12,
+   KEY_M           = 13,
+   KEY_N           = 14,
+   KEY_O           = 15,
+   KEY_P           = 16,
+   KEY_Q           = 17,
+   KEY_R           = 18,
+   KEY_S           = 19,
+   KEY_T           = 20,
+   KEY_U           = 21,
+   KEY_V           = 22,
+   KEY_W           = 23,
+   KEY_X           = 24,
+   KEY_Y           = 25,
+   KEY_Z           = 26,
+   KEY_0           = 27,
+   KEY_1           = 28,
+   KEY_2           = 29,
+   KEY_3           = 30,
+   KEY_4           = 31,
+   KEY_5           = 32,
+   KEY_6           = 33,
+   KEY_7           = 34,
+   KEY_8           = 35,
+   KEY_9           = 36,
+   KEY_0_PAD       = 37,
+   KEY_1_PAD       = 38,
+   KEY_2_PAD       = 39,
+   KEY_3_PAD       = 40,
+   KEY_4_PAD       = 41,
+   KEY_5_PAD       = 42,
+   KEY_6_PAD       = 43,
+   KEY_7_PAD       = 44,
+   KEY_8_PAD       = 45,
+   KEY_9_PAD       = 46,
+   KEY_F1          = 47,
+   KEY_F2          = 48,
+   KEY_F3          = 49,
+   KEY_F4          = 50,
+   KEY_F5          = 51,
+   KEY_F6          = 52,
+   KEY_F7          = 53,
+   KEY_F8          = 54,
+   KEY_F9          = 55,
+   KEY_F10         = 56,
+   KEY_F11         = 57,
+   KEY_F12         = 58,
+   KEY_ESC         = 59,
+   KEY_TILDE       = 60,
+   KEY_MINUS       = 61,
+   KEY_EQUALS      = 62,
+   KEY_BACKSPACE   = 63,
+   KEY_TAB         = 64,
+   KEY_OPENBRACE   = 65,
+   KEY_CLOSEBRACE  = 66,
+   KEY_ENTER       = 67,
+   KEY_COLON       = 68,
+   KEY_QUOTE       = 69,
+   KEY_BACKSLASH   = 70,
+   KEY_BACKSLASH2  = 71,
+   KEY_COMMA       = 72,
+   KEY_STOP        = 73,
+   KEY_SLASH       = 74,
+   KEY_SPACE       = 75,
+   KEY_INSERT      = 76,
+   KEY_DEL         = 77,
+   KEY_HOME        = 78,
+   KEY_END         = 79,
+   KEY_PGUP        = 80,
+   KEY_PGDN        = 81,
+   KEY_LEFT        = 82,
+   KEY_RIGHT       = 83,
+   KEY_UP          = 84,
+   KEY_DOWN        = 85,
+   KEY_SLASH_PAD   = 86,
+   KEY_ASTERISK    = 87,
+   KEY_MINUS_PAD   = 88,
+   KEY_PLUS_PAD    = 89,
+   KEY_DEL_PAD     = 90,
+   KEY_ENTER_PAD   = 91,
+   KEY_PRTSCR      = 92,
+   KEY_PAUSE       = 93,
+   KEY_ABNT_C1     = 94,
+   KEY_YEN         = 95,
+   KEY_KANA        = 96,
+   KEY_CONVERT     = 97,
+   KEY_NOCONVERT   = 98,
+   KEY_AT          = 99,
+   KEY_CIRCUMFLEX  = 100,
+   KEY_COLON2      = 101,
+   KEY_KANJI       = 102,
+   KEY_EQUALS_PAD  = 103, -- MacOS X
+   KEY_BACKQUOTE   = 104, -- MacOS X
+   KEY_SEMICOLON   = 105, -- MacOS X
+   KEY_COMMAND     = 106, -- MacOS X
+   KEY_UNKNOWN1    = 107,
+   KEY_UNKNOWN2    = 108,
+   KEY_UNKNOWN3    = 109,
+   KEY_UNKNOWN4    = 110,
+   KEY_UNKNOWN5    = 111,
+   KEY_UNKNOWN6    = 112,
+   KEY_UNKNOWN7    = 113,
+   KEY_UNKNOWN8    = 114,
+
+   KEY_MODIFIERS   = 115,
+
+   KEY_LSHIFT      = 115,
+   KEY_RSHIFT      = 116,
+   KEY_LCONTROL    = 117,
+   KEY_RCONTROL    = 118,
+   KEY_ALT         = 119,
+   KEY_ALTGR       = 120,
+   KEY_LWIN        = 121,
+   KEY_RWIN        = 122,
+   KEY_MENU        = 123,
+   KEY_SCRLOCK     = 124,
+   KEY_NUMLOCK     = 125,
+   KEY_CAPSLOCK    = 126,
+
+   KEY_MAX         = 127
+
+global constant
+   key_led_flag     = define_c_var(AllegroLib,"key_led_flag"),
+   key_shifts_ptr   = define_c_var(AllegroLib,"key_shifts"),
+   key_ptr          = define_c_var(AllegroLib,"key")
+
+-----------------------------
+-- install_keyboard
+constant my_install_keyboard = link_func(AllegroLib, "install_keyboard", {}, C_INT)
+global function install_keyboard()
+   return c_func(my_install_keyboard, {})
+end function
+
+-----------------------------
+-- remove_keyboard
+constant my_remove_keyboard = link_proc(AllegroLib, "remove_keyboard", {})
+global procedure remove_keyboard()
+   c_proc(my_remove_keyboard, {})
+end procedure
+
+-----------------------------
+-- install_keyboard_hooks
+-- TODO: Keyboard routines:
+-- TODO: void install_keyboard_hooks(int (*keypressed)(), int (*readkey)());
+
+-----------------------------
+-- poll_keyboard
+constant my_poll_keyboard = link_func(AllegroLib, "poll_keyboard", {}, C_INT)
+global function poll_keyboard()
+   return c_func(my_poll_keyboard, {})
+end function
+
+-----------------------------
+-- keyboard_needs_poll
+constant my_keyboard_needs_poll = link_func(AllegroLib, "keyboard_needs_poll", {}, C_INT)
+global function keyboard_needs_poll()
+   return eu_true_false( c_func(my_keyboard_needs_poll, {}) )
+end function
+
+-----------------------------
+-- key
+global function key(integer mykey)
+   return peek(key_ptr+mykey)
+end function
+
+-----------------------------
+-- key_shifts
+global function key_shifts(object k)
+   if sequence(k) then
+      k = or_all(k)
+  end if
+  return and_bits(k, peek4u(key_shifts_ptr))
+end function
+
+-----------------------------
+-- keypressed
+constant my_keypressed = link_func(AllegroLib, "keypressed", {}, C_INT)
+global function keypressed()
+   return eu_true_false( c_func(my_keypressed, {}) )
+end function
+
+-----------------------------
+-- readkey
+constant my_readkey = link_func(AllegroLib, "readkey", {}, C_INT)
+global function readkey()
+   integer ret
+
+   ret = c_func(my_readkey, {})
+   return { and_bits(ret, #00FF), and_bits(ret, #FF00) }
+end function
+
+-----------------------------
+-- ureadkey
+constant my_ureadkey = link_func(AllegroLib, "ureadkey", {C_POINTER}, C_INT)
+global function ureadkey()
+   integer ret, scancode
+   atom scancode_ptr
+   scancode_ptr=allocate(4)
+   ret = c_func(my_ureadkey, {scancode_ptr})
+   scancode=peek4u(scancode_ptr)
+   free(scancode_ptr)
+
+   return {ret, scancode}
+end function
+
+-----------------------------
+-- scancode_to_ascii
+constant my_scancode_to_ascii = link_func(AllegroLib, "scancode_to_ascii", {}, C_INT)
+global function scancode_to_ascii(integer scancode)
+   return c_func(my_scancode_to_ascii, {scancode})
+end function
+
+-----------------------------
+-- scancode_to_name
+constant my_scancode_to_name = link_func(AllegroLib, "scancode_to_name", {}, C_INT)
+global function scancode_to_name(integer scancode)
+   atom name_ptr
+
+   name_ptr = c_func(my_scancode_to_name, {scancode})
+   return peek_sequence(name_ptr, 64)
+end function
+
+-----------------------------
+-- simulate_keypress
+constant my_simulate_keypress = link_proc(AllegroLib, "simulate_keypress", {C_INT})
+global procedure simulate_keypress(integer key)
+   c_proc(my_simulate_keypress, {key})
+end procedure
+
+-----------------------------
+-- simulate_ukeypress
+constant my_simulate_ukeypress = link_proc(AllegroLib, "simulate_ukeypress", {C_INT, C_INT})
+global procedure simulate_ukeypress(integer key, integer scancode)
+   c_proc(my_simulate_ukeypress, {key, scancode})
+end procedure
+
+-----------------------------
+-- keyboard_callback
+-- TODO: extern int (*keyboard_callback)(int key);
+
+-----------------------------
+-- keyboard_ucallback
+-- TODO: extern int (*keyboard_ucallback)(int key, int *scancode);
+
+-----------------------------
+-- keyboard_lowlevel_callback
+-- TODO: extern void (*keyboard_lowlevel_callback)(int scancode);
+
+-----------------------------
+-- set_leds
+constant my_set_leds = link_proc(AllegroLib, "set_leds", {C_INT})
+global procedure set_leds(integer leds)
+   c_proc(my_set_leds, {leds})
+end procedure
+
+-----------------------------
+-- set_keyboard_rate
+constant my_set_keyboard_rate = link_proc(AllegroLib, "set_keyboard_rate", {C_INT, C_INT})
+global procedure set_keyboard_rate(integer delay, integer repeat)
+   c_proc(my_set_keyboard_rate, {delay, repeat})
+end procedure
+
+-----------------------------
+-- clear_keybuf
+constant my_clear_keybuf = link_proc(AllegroLib, "clear_keybuf", {})
+global procedure clear_keybuf()
+   c_proc(my_clear_keybuf, {})
+end procedure
+
+-----------------------------
+-- three_finger_flag
+-- TODO: extern int three_finger_flag;
+
+-----------------------------
+-- key_led_flag
+-- TODO: extern int key_led_flag;
+
+
+--*************************************************
+-- joystick routines
+--*************************************************
+
+-----------------------------
+-- install_joystick
+global constant
+   JOY_TYPE_AUTODETECT = -1,
+   JOY_TYPE_NONE       = 0
+global integer num_joysticks
+num_joysticks=-1
+constant my_install_joystick = link_func(AllegroLib, "install_joystick", {C_INT}, C_INT)
+global function install_joystick(integer joy_type)
+   integer ret
+   ret = c_func(my_install_joystick, {joy_type})
+   num_joysticks = link_var(AllegroLib, "num_joysticks")
+   return ret
+end function
+
+-----------------------------
+-- remove_joystick
+constant my_remove_joystick = link_proc(AllegroLib, "remove_joystick", {})
+global procedure remove_joystick()
+   c_proc(my_remove_joystick, {})
+end procedure
+
+-----------------------------
+-- poll_joystick
+constant my_poll_joystick = link_func(AllegroLib, "poll_joystick", {}, C_INT)
+global function poll_joystick()
+   return c_func(my_poll_joystick, {})
+end function
+
+-----------------------------
+-- joy
+global constant
+   JOYFLAG_DIGITAL          = 1,
+   JOYFLAG_ANALOGUE         = 2,
+   JOYFLAG_CALIB_DIGITAL    = 4,
+   JOYFLAG_CALIB_ANALOGUE   = 8,
+   JOYFLAG_CALIBRATE        = 16,
+   JOYFLAG_SIGNED           = 32,
+   JOYFLAG_UNSIGNED         = 64
+-- TODO: Joystick routines:
+-- TODO: get the joystick "joy" info from c structures <- all other joy routines useless without this one!!!
+
+-----------------------------
+-- calibrate_joystick_name
+constant my_calibrate_joystick_name = link_func(AllegroLib, "calibrate_joystick_name", {C_INT}, C_POINTER)
+global function calibrate_joystick_name(integer n)
+   return peek_sequence_null(c_func(my_calibrate_joystick_name, {n}), 128)
+end function
+
+-----------------------------
+-- calibrate_joystick
+constant my_calibrate_joystick = link_func(AllegroLib, "calibrate_joystick", {C_INT}, C_INT)
+global function calibrate_joystick(integer n)
+   return c_func(my_calibrate_joystick, {n})
+end function
+
+-----------------------------
+-- save_joystick_data
+constant my_save_joystick_data = link_func(AllegroLib, "save_joystick_data", {C_POINTER}, C_INT)
+global function save_joystick_data(sequence filename)
+   integer ret
+   atom filename_ptr
+
+   filename_ptr=allocate_string(filename)
+   ret = c_func(my_save_joystick_data, {filename_ptr})
+   free(filename_ptr)
+   return ret
+end function
+
+-----------------------------
+-- load_joystick_data
+constant my_load_joystick_data = link_func(AllegroLib, "load_joystick_data", {C_POINTER}, C_INT)
+global function load_joystick_data(sequence filename)
+   integer ret
+   atom filename_ptr
+
+   filename_ptr=allocate_string(filename)
+   ret = c_func(my_load_joystick_data, {filename_ptr})
+   free(filename_ptr)
+   return ret
+end function
+
+
+
+--*************************************************
+-- Graphics modes routines
+--*************************************************
+
+-- screen constants
+global constant
+  GFX_TEXT                  = -1,
+  GFX_AUTODETECT            = 0,
+  GFX_AUTODETECT_FULLSCREEN = 1,
+  GFX_AUTODETECT_WINDOWED   = 2,
+  GFX_SAFE                  = AL_ID('S','A','F','E'),
+  GFX_DIRECTX_WIN           = AL_ID('D','X','W','N')
+
+-- used in gfx_capabilities
+global constant
+   GFX_CAN_SCROLL             = #00000001,
+   GFX_CAN_TRIPLE_BUFFER      = #00000002,
+   GFX_HW_CURSOR              = #00000004,
+   GFX_HW_HLINE               = #00000008,
+   GFX_HW_HLINE_XOR           = #00000010,
+   GFX_HW_HLINE_SOLID_PATTERN = #00000020,
+   GFX_HW_HLINE_COPY_PATTERN  = #00000040,
+   GFX_HW_FILL                = #00000080,
+   GFX_HW_FILL_XOR            = #00000100,
+   GFX_HW_FILL_SOLID_PATTERN  = #00000200,
+   GFX_HW_FILL_COPY_PATTERN   = #00000400,
+   GFX_HW_LINE                = #00000800,
+   GFX_HW_LINE_XOR            = #00001000,
+   GFX_HW_TRIANGLE            = #00002000,
+   GFX_HW_TRIANGLE_XOR        = #00004000,
+   GFX_HW_GLYPH               = #00008000,
+   GFX_HW_VRAM_BLIT           = #00010000,
+   GFX_HW_VRAM_BLIT_MASKED    = #00020000,
+   GFX_HW_MEM_BLIT            = #00040000,
+   GFX_HW_MEM_BLIT_MASKED     = #00080000,
+   GFX_HW_SYS_TO_VRAM_BLIT    = #00100000,
+   GFX_HW_SYS_TO_VRAM_BLIT_MASKED  = #00200000
+
+-- used in set_display_switch mode
+global constant
+   SWITCH_NONE         =  0,
+   SWITCH_PAUSE        =  1,
+   SWITCH_AMNESIA      =  2,
+   SWITCH_BACKGROUND   =  3,
+   SWITCH_BACKAMNESIA  =  4,
+
+   SWITCH_IN           =  0,
+   SWITCH_OUT          =  1
+
+global constant
+   gfx_driver       = define_c_var(AllegroLib,"gfx_driver")
+
+-----------------------------
+-- set_color_depth
+constant my_set_color_depth = link_proc(AllegroLib, "set_color_depth", {C_INT})
+global procedure set_color_depth(integer depth)
+   c_proc(my_set_color_depth,{depth})
+end procedure
+
+-----------------------------
+-- get_color_depth
+constant my_get_color_depth = link_func(AllegroLib, "get_color_depth", {}, C_INT)
+global function get_color_depth()
+   return c_func(my_get_color_depth,{})
+end function
+
+-----------------------------
+-- request_refresh_rate
+constant my_request_refresh_rate = link_proc(AllegroLib, "request_refresh_rate", {C_INT})
+global procedure request_refresh_rate(integer rate)
+   c_proc(my_request_refresh_rate,{rate})
+end procedure
+
+-----------------------------
+-- get_refresh_rate
+constant my_get_refresh_rate = link_func(AllegroLib, "get_refresh_rate", {}, C_INT)
+global function get_refresh_rate()
+   return c_func(my_get_refresh_rate,{})
+end function
+
+-----------------------------
+-- get_gfx_mode_list
+-- TODO: Graphics modes routines:
+-- TODO: GFX_MODE_LIST *get_gfx_mode_list(int card);
+
+-----------------------------
+-- destroy_gfx_mode_list
+-- TODO: void destroy_gfx_mode_list(GFX_MODE_LIST *mode_list);
+
+-----------------------------
+-- set_gfx_mode
+atom my_screen
+my_screen = define_c_var(AllegroLib,"screen")
+global atom screen
+
+global integer
+   SCREEN_W,
+   SCREEN_H,
+   VIRTUAL_W,
+   VIRTUAL_H
+global sequence
+   GFX_DRIVER_NAME
+
+constant my_set_gfx_mode = link_func(AllegroLib, "set_gfx_mode", {C_INT, C_INT, C_INT, C_INT, C_INT}, C_INT)
+global function set_gfx_mode(atom card, integer w, integer h, integer v_w, integer v_h)
+   atom ret_val
+
+   ret_val = c_func(my_set_gfx_mode, {card, w, h, v_w, v_h})
+   if not ret_val then
+      SCREEN_W  = peek4u(peek4u(gfx_driver)+4*27)
+      SCREEN_H  = peek4u(peek4u(gfx_driver)+4*28)
+      screen    = peek4u(my_screen)
+      VIRTUAL_W = peek4u(screen)   -- v_w
+      VIRTUAL_H = peek4u(screen+4) -- v_h
+      GFX_DRIVER_NAME = peek_sequence( peek4u(peek4u(gfx_driver)+4), 128)
+  end if
+  return ret_val
+
+end function
+
+-----------------------------
+-- set_display_switch_mode
+constant my_set_display_switch_mode = link_func(AllegroLib, "set_display_switch_mode", {}, C_INT)
+global function set_display_switch_mode(integer mode)
+   return c_func(my_set_display_switch_mode,{mode})
+end function
+
+-----------------------------
+-- set_display_switch_callback
+-- TODO: int set_display_switch_callback(int dir, void (*cb)());
+
+-----------------------------
+-- remove_display_switch_callback
+-- TODO: void remove_display_switch_callback(void (*cb)());
+
+-----------------------------
+-- get_display_switch_mode
+constant my_get_display_switch_mode = link_func(AllegroLib, "get_display_switch_mode", {}, C_INT)
+global function get_display_switch_mode()
+   return c_func(my_get_display_switch_mode,{})
+end function
+
+-----------------------------
+-- is_windowed_mode
+constant my_is_windowed_mode = link_func(AllegroLib, "is_windowed_mode", {}, C_INT)
+global function is_windowed_mode()
+   return c_func(my_is_windowed_mode,{})
+end function
+
+-----------------------------
+-- gfx_capabilites
+constant my_gfx_capabilities = link_var(AllegroLib, "gfx_capabilities")
+global function gfx_capabilities()
+   return peek4u(my_gfx_capabilities)
+end function
+
+-----------------------------
+-- enable_triple_buffer
+constant my_enable_triple_buffer = link_func(AllegroLib, "enable_triple_buffer", {}, C_INT)
+global function enable_triple_buffer()
+   return c_func(my_enable_triple_buffer, {})
+end function
+
+-----------------------------
+-- scroll_screen
+constant my_scroll_screen = link_func(AllegroLib, "scroll_screen", {C_INT, C_INT}, C_INT)
+global function scroll_screen(integer x, integer y)
+   return c_func(my_scroll_screen, {x, y})
+end function
+
+-----------------------------
+-- request_scroll
+constant my_request_scroll = link_func(AllegroLib, "request_scroll", {C_INT, C_INT}, C_INT)
+global function request_scroll(integer x, integer y)
+   return c_func(my_request_scroll, {x, y})
+end function
+
+-----------------------------
+-- poll_scroll
+constant my_poll_scroll = link_func(AllegroLib, "poll_scroll", {}, C_INT)
+global function poll_scroll()
+   return c_func(my_poll_scroll,{})
+end function
+
+-----------------------------
+-- show_video_bitmap
+constant my_show_video_bitmap = link_func(AllegroLib, "show_video_bitmap", {C_POINTER}, C_INT)
+global function show_video_bitmap(atom mybmp)
+   return c_func(my_show_video_bitmap,{mybmp})
+end function
+
+-----------------------------
+-- request_video_bitmap
+constant my_request_video_bitmap = link_func(AllegroLib, "request_video_bitmap", {C_POINTER}, C_INT)
+global function request_video_bitmap(atom mybmp)
+   return c_func(my_request_video_bitmap,{mybmp})
+end function
+
+-----------------------------
+-- vsync
+constant my_vsync = link_proc(AllegroLib, "vsync", {} )
+global procedure vsync()
+   c_proc(my_vsync, {})
+end procedure
+
+
+--*************************************************
+-- bitmap routines
+--*************************************************
+
+-----------------------------
+-- create_bitmap
+constant my_create_bitmap = link_func(AllegroLib, "create_bitmap", {C_INT, C_INT}, C_POINTER)
+global function create_bitmap(integer x, integer y)
+   return c_func(my_create_bitmap, {x, y})
+end function
+
+-----------------------------
+-- bitmap_w
+global function bitmap_w(atom bmp)
+  return peek4u(bmp)
+end function
+
+-----------------------------
+-- bitmap_h
+global function bitmap_h(atom bmp)
+  return peek4u(bmp + 4)
+end function
+
+-----------------------------
+-- create_bitmap_ex
+constant my_create_bitmap_ex = link_func(AllegroLib, "create_bitmap_ex", {C_POINTER, C_INT, C_INT}, C_POINTER)
+global function create_bitmap_ex(atom mybmp, integer x, integer y)
+   return c_func(my_create_bitmap_ex, {mybmp, x, y})
+end function
+
+-----------------------------
+-- create_sub_bitmap
+constant my_create_sub_bitmap = link_func(AllegroLib, "create_sub_bitmap", {C_POINTER, C_INT, C_INT, C_INT, C_INT}, C_POINTER)
+global function create_sub_bitmap(atom parent, integer x, integer y, integer width, integer height)
+   return c_func(my_create_sub_bitmap, {parent, x, y, width, height})
+end function
+
+-----------------------------
+-- create_video_bitmap
+constant my_create_video_bitmap = link_func(AllegroLib, "create_video_bitmap", {C_INT, C_INT}, C_POINTER)
+global function create_video_bitmap(integer x, integer y)
+   return c_func(my_create_video_bitmap, {x, y})
+end function
+
+-----------------------------
+-- create_system_bitmap
+constant my_create_system_bitmap = link_func(AllegroLib, "create_system_bitmap", {C_INT, C_INT}, C_POINTER)
+global function create_system_bitmap(integer x, integer y)
+   return c_func(my_create_system_bitmap, {x, y})
+end function
+
+-----------------------------
+-- destroy_bitmap
+constant my_destroy_bitmap = link_proc(AllegroLib, "destroy_bitmap", {C_POINTER})
+global procedure destroy_bitmap(atom mybmp)
+   c_proc(my_destroy_bitmap, {mybmp})
+end procedure
+
+-----------------------------
+-- bitmap_color_depth
+constant my_bitmap_color_depth = link_func(AllegroLib, "bitmap_color_depth", {C_POINTER}, C_INT)
+global function bitmap_color_depth(atom mybmp)
+   return c_func(my_bitmap_color_depth, {mybmp})
+end function
+
+-----------------------------
+-- bitmap_mask_color
+constant my_bitmap_mask_color = link_func(AllegroLib, "bitmap_mask_color", {C_POINTER}, C_INT)
+global function bitmap_mask_color(atom mybmp)
+   return c_func(my_bitmap_mask_color, {mybmp})
+end function
+
+-----------------------------
+-- is_same_bitmap
+constant my_is_same_bitmap = link_func(AllegroLib, "is_same_bitmap", {C_POINTER, C_POINTER}, C_INT)
+global function is_same_bitmap(atom bmp1, atom bmp2)
+   return c_func(my_is_same_bitmap, {bmp1, bmp2})
+end function
+
+-----------------------------
+-- is_planar_bitmap
+constant my_is_planar_bitmap = link_func(AllegroLib, "is_planar_bitmap", {C_POINTER}, C_INT)
+global function is_planar_bitmap(atom mybmp)
+   return c_func(my_is_planar_bitmap, {mybmp})
+end function
+
+-----------------------------
+-- is_linear_bitmap
+constant my_is_linear_bitmap = link_func(AllegroLib, "is_linear_bitmap", {C_POINTER}, C_INT)
+global function is_linear_bitmap(atom mybmp)
+   return c_func(my_is_linear_bitmap, {mybmp})
+end function
+
+-----------------------------
+-- is_memory_bitmap
+constant my_is_memory_bitmap = link_func(AllegroLib, "is_memory_bitmap", {C_POINTER}, C_INT)
+global function is_memory_bitmap(atom mybmp)
+   return c_func(my_is_memory_bitmap, {mybmp})
+end function
+
+-----------------------------
+-- is_screen_bitmap
+constant my_is_screen_bitmap = link_func(AllegroLib, "is_screen_bitmap", {C_POINTER}, C_INT)
+global function is_screen_bitmap(atom mybmp)
+   return c_func(my_is_screen_bitmap, {mybmp})
+end function
+
+-----------------------------
+-- is_video_bitmap
+constant my_is_video_bitmap = link_func(AllegroLib, "is_video_bitmap", {C_POINTER}, C_INT)
+global function is_video_bitmap(atom mybmp)
+   return c_func(my_is_video_bitmap, {mybmp})
+end function
+
+-----------------------------
+-- is_system_bitmap
+constant my_is_system_bitmap = link_func(AllegroLib, "is_system_bitmap", {C_POINTER}, C_INT)
+global function is_system_bitmap(atom mybmp)
+   return c_func(my_is_system_bitmap, {mybmp})
+end function
+
+-----------------------------
+-- is_sub_bitmap
+constant my_is_sub_bitmap = link_func(AllegroLib, "is_sub_bitmap", {C_POINTER}, C_INT)
+global function is_sub_bitmap(atom mybmp)
+   return c_func(my_is_sub_bitmap, {mybmp})
+end function
+
+-----------------------------
+-- acquire_bitmap
+constant my_acquire_bitmap = link_proc(AllegroLib, "acquire_bitmap", {C_POINTER})
+global procedure acquire_bitmap(atom mybmp)
+   c_proc(my_acquire_bitmap, {mybmp})
+end procedure
+
+-----------------------------
+-- release_bitmap
+constant my_release_bitmap = link_proc(AllegroLib, "release_bitmap", {C_POINTER})
+global procedure release_bitmap(atom mybmp)
+   c_proc(my_release_bitmap, {mybmp})
+end procedure
+
+-----------------------------
+-- acquire_screen
+constant my_acquire_screen = link_proc(AllegroLib, "acquire_screen", {})
+global procedure acquire_screen()
+   c_proc(my_acquire_screen, {})
+end procedure
+
+-----------------------------
+-- release_screen
+constant my_release_screen = link_proc(AllegroLib, "release_screen", {})
+global procedure release_screen()
+   c_proc(my_release_screen, {})
+end procedure
+
+-----------------------------
+-- set_clip_rect
+constant my_set_clip_rect = link_proc(AllegroLib, "set_clip_rect", {C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure set_clip_rect(atom mybmp, integer x1, integer y1, integer x2, integer y2)
+   c_proc(my_set_clip_rect, {mybmp, x1, y1, x2, y2})
+end procedure
+
+-----------------------------
+-- get_clip_rect
+constant my_get_clip_rect = link_proc(AllegroLib, "get_clip_rect", {C_POINTER, C_POINTER, C_POINTER, C_POINTER, C_POINTER})
+global function get_clip_rect(atom bmp)
+   atom px1, py1, px2, py2
+   integer x1, y1, x2, y2
+
+   px1=allocate(4)
+   py1=allocate(4)
+   px2=allocate(4)
+   py2=allocate(4)
+
+   c_proc(my_get_clip_rect, {bmp, px1, py1, px2, py2})
+
+   x1=peek4u(px1)
+   y1=peek4u(py1)
+   x2=peek4u(px2)
+   y2=peek4u(py2)
+
+   free(px1)
+   free(py1)
+   free(px2)
+   free(py2)
+
+   return {x1, y1, x2, y2}
+end function
+
+-----------------------------
+-- add_clip_rect
+constant my_add_clip_rect = link_proc(AllegroLib, "add_clip_rect", {C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure add_clip_rect(atom bmp, integer x1, integer y1, integer x2, integer y2)
+   c_proc(my_add_clip_rect, {bmp, x1, y1, x2, y2})
+end procedure
+
+-----------------------------
+-- set_clip_state
+constant my_set_clip_state = link_proc(AllegroLib, "set_clip_state", {C_POINTER, C_INT})
+global procedure set_clip_state(atom bmp, integer state)
+   c_proc(my_set_clip_state, {bmp, state})
+end procedure
+
+-----------------------------
+-- get_clip_state
+constant my_get_clip_state = link_func(AllegroLib, "get_clip_state", {C_POINTER}, C_INT)
+global function get_clip_state(atom bmp, integer state)
+   return c_func(my_get_clip_state, {bmp})
+end function
+
+-----------------------------
+-- is_inside_bitmap
+constant my_is_inside_bitmap = link_func(AllegroLib, "is_inside_bitmap", {C_POINTER, C_INT, C_INT, C_INT}, C_INT)
+global function is_inside_bitmap(atom bmp, integer x, integer y, integer clip)
+   return c_func(my_is_inside_bitmap, {bmp, x, y, clip})
+end function
+
+
+--*************************************************
+-- Loading image file routines
+--*************************************************
+
+--used in converting gfx
+global constant
+   COLORCONV_NONE      =   0,
+
+   COLORCONV_8_TO_15      = 1,
+   COLORCONV_8_TO_16      = 2,
+   COLORCONV_8_TO_24      = 4,
+   COLORCONV_8_TO_32      = 8,
+
+   COLORCONV_15_TO_8      = #10,
+   COLORCONV_15_TO_16     = #20,
+   COLORCONV_15_TO_24     = #40,
+   COLORCONV_15_TO_32     = #80,
+
+   COLORCONV_16_TO_8      = #100,
+   COLORCONV_16_TO_15     = #200,
+   COLORCONV_16_TO_24     = #400,
+   COLORCONV_16_TO_32     = #800,
+
+   COLORCONV_24_TO_8      = #1000,
+   COLORCONV_24_TO_15     = #2000,
+   COLORCONV_24_TO_16     = #4000,
+   COLORCONV_24_TO_32     = #8000,
+
+   COLORCONV_32_TO_8      = #10000,
+   COLORCONV_32_TO_15     = #20000,
+   COLORCONV_32_TO_16     = #40000,
+   COLORCONV_32_TO_24     = #80000,
+
+   COLORCONV_32A_TO_8     = #100000,
+   COLORCONV_32A_TO_15    = #200000,
+   COLORCONV_32A_TO_16    = #400000,
+   COLORCONV_32A_TO_24    = #800000,
+
+   COLORCONV_DITHER_PAL   = #1000000,
+   COLORCONV_DITHER_HI    = #2000000,
+
+   COLORCONV_DITHER       = or_bits(COLORCONV_DITHER_PAL,
+            COLORCONV_DITHER_HI),
+
+   COLORCONV_EXPAND_256      = or_bits(COLORCONV_8_TO_15,
+            or_bits(COLORCONV_8_TO_16,
+             or_bits(COLORCONV_8_TO_24,
+              COLORCONV_8_TO_32))),
+
+   COLORCONV_REDUCE_TO_256   = or_bits(COLORCONV_15_TO_8,
+            or_bits(COLORCONV_16_TO_8,
+             or_bits(COLORCONV_24_TO_8,
+              or_bits(COLORCONV_32_TO_8,
+               COLORCONV_32A_TO_8)))),
+
+   COLORCONV_EXPAND_15_TO_16   = COLORCONV_15_TO_16,
+
+   COLORCONV_REDUCE_16_TO_15   = COLORCONV_16_TO_15,
+
+   COLORCONV_EXPAND_HI_TO_TRUE = or_bits(COLORCONV_15_TO_24,
+              or_bits(COLORCONV_15_TO_32,
+               or_bits(COLORCONV_16_TO_24,
+                COLORCONV_16_TO_32))),
+
+   COLORCONV_REDUCE_TRUE_TO_HI = or_bits(COLORCONV_24_TO_15,
+              or_bits(COLORCONV_24_TO_16,
+               or_bits(COLORCONV_32_TO_15,
+                COLORCONV_32_TO_16))),
+
+   COLORCONV_24_EQUALS_32      = or_bits(COLORCONV_24_TO_32,
+              COLORCONV_32_TO_24),
+
+   COLORCONV_TOTAL          = or_bits(COLORCONV_EXPAND_256,
+              or_bits(COLORCONV_REDUCE_TO_256,
+               or_bits(COLORCONV_EXPAND_15_TO_16,
+                or_bits(COLORCONV_REDUCE_16_TO_15,
+                 or_bits(COLORCONV_EXPAND_HI_TO_TRUE,
+                  or_bits(COLORCONV_REDUCE_TRUE_TO_HI,
+                   or_bits(COLORCONV_24_EQUALS_32,
+               or_bits(COLORCONV_32A_TO_15,
+                or_bits(COLORCONV_32A_TO_16,
+                 COLORCONV_32A_TO_24))))))))),
+
+   COLORCONV_PARTIAL       = or_bits(COLORCONV_EXPAND_15_TO_16,
+             or_bits(COLORCONV_REDUCE_16_TO_15,
+              COLORCONV_24_EQUALS_32)),
+
+   COLORCONV_MOST       = or_bits(COLORCONV_EXPAND_15_TO_16,
+             or_bits(COLORCONV_REDUCE_16_TO_15,
+              or_bits(COLORCONV_EXPAND_HI_TO_TRUE,
+               or_bits(COLORCONV_REDUCE_TRUE_TO_HI,
+                COLORCONV_24_EQUALS_32))))
+
+-----------------------------
+-- load_bitmap
+constant my_load_bitmap = link_func(AllegroLib, "load_bitmap", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_bitmap(sequence filename, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_bitmap, {filename_addr, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- load_bmp
+constant my_load_bmp = link_func(AllegroLib, "load_bmp", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_bmp(sequence filename, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_bmp, {filename_addr, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- load_bmp_pf
+constant my_load_bmp_pf = link_func(AllegroLib, "load_bmp_pf", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_bmp_pf(atom packfile, atom rgb)
+   return c_func(my_load_bmp_pf, {packfile, rgb})
+end function
+
+-----------------------------
+-- load_lbm
+constant my_load_lbm = link_func(AllegroLib, "load_lbm", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_lbm(sequence filename, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_lbm, {filename_addr, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- load_pcx
+constant my_load_pcx = link_func(AllegroLib, "load_pcx", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_pcx(sequence filename, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_pcx, {filename_addr, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- load_pcx_pf
+constant my_load_pcx_pf = link_func(AllegroLib, "load_pcx_pf", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_pcx_pf(atom packfile, atom rgb)
+   return c_func(my_load_pcx_pf, {packfile, rgb})
+end function
+
+-----------------------------
+-- load_tga
+constant my_load_tga = link_func(AllegroLib, "load_tga", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_tga(sequence filename, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_tga, {filename_addr, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- load_tga_pf
+constant my_load_tga_pf = link_func(AllegroLib, "load_tga_pf", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_tga_pf(atom packfile, atom rgb)
+   return c_func(my_load_tga_pf, {packfile, rgb})
+end function
+
+-----------------------------
+-- save_bitmap
+constant my_save_bitmap = link_func(AllegroLib, "save_bitmap", {C_POINTER, C_POINTER, C_POINTER}, C_INT)
+global function save_bitmap(sequence filename, atom mybmp, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_save_bitmap, {filename_addr, mybmp, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- save_bmp
+constant my_save_bmp = link_func(AllegroLib, "save_bmp", {C_POINTER, C_POINTER, C_POINTER}, C_INT)
+global function save_bmp(sequence filename, atom mybmp, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_save_bmp, {filename_addr, mybmp, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- save_bmp_pf
+constant my_save_bmp_pf = link_func(AllegroLib, "save_bmp_pf", {C_POINTER, C_POINTER}, C_POINTER)
+global function save_bmp_pf(atom packfile, atom rgb)
+   return c_func(my_save_bmp_pf, {packfile, rgb})
+end function
+
+-----------------------------
+-- save_pcx
+constant my_save_pcx = link_func(AllegroLib, "save_pcx", {C_POINTER, C_POINTER, C_POINTER}, C_INT)
+global function save_pcx(sequence filename, atom mybmp, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_save_pcx, {filename_addr, mybmp, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- save_pcx_pf
+constant my_save_pcx_pf = link_func(AllegroLib, "save_pcx_pf", {C_POINTER, C_POINTER}, C_POINTER)
+global function save_pcx_pf(atom packfile, atom rgb)
+   return c_func(my_save_pcx_pf, {packfile, rgb})
+end function
+
+-----------------------------
+-- save_tga
+constant my_save_tga = link_func(AllegroLib, "save_tga", {C_POINTER, C_POINTER, C_POINTER}, C_INT)
+global function save_tga(sequence filename, atom mybmp, atom palette)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_save_tga, {filename_addr, mybmp, palette})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- save_tga_pf
+constant my_save_tga_pf = link_func(AllegroLib, "save_tga_pf", {C_POINTER, C_POINTER}, C_POINTER)
+global function save_tga_pf(atom packfile, atom rgb)
+   return c_func(my_save_tga_pf, {packfile, rgb})
+end function
+
+-----------------------------
+-- register_bitmap_file_type
+-- TODO: Loading imgae file routines:
+-- TODO: void register_bitmap_file_type(const char *ext, BITMAP *(*load)(const char *filename, RGB *pal), int (*save)(const char *filename, BITMAP *bmp, const RGB *pal));
+
+-----------------------------
+-- set_color_conversion
+constant my_set_color_conversion = link_proc(AllegroLib, "set_color_conversion", {C_INT})
+global procedure set_color_conversion(integer mode)
+   c_proc(my_set_color_conversion,{mode})
+end procedure
+
+-----------------------------
+-- get_color_conversion
+constant my_get_color_conversion = link_func(AllegroLib, "get_color_conversion", {}, C_INT)
+global function get_color_conversion()
+   return c_func(my_get_color_conversion,{})
+end function
+
+
+--*************************************************
+-- Palette routines
+--*************************************************
+
+-----------------------------
+-- inline_set_color
+constant my_inline_set_color = link_proc(AllegroLib, "_set_color", {C_INT, C_POINTER} )
+global procedure inline_set_color(integer index, atom palette)
+   c_proc(my_inline_set_color, {index, palette})
+end procedure
+
+-----------------------------
+-- set_color
+constant my_set_color = link_proc(AllegroLib, "set_color", {C_INT, C_POINTER} )
+global procedure set_color(integer index, atom palette)
+   c_proc(my_set_color, {index, palette})
+end procedure
+
+-----------------------------
+-- set_palette
+-- should I remove sequence handling since I now have allocate_palette
+-- and sequence_to_palette?
+--
+constant my_set_palette = link_proc(AllegroLib, "set_palette", {C_POINTER})
+global procedure set_palette(object pal)
+   atom pal_addr
+   integer pal_len, offset
+
+   if sequence(pal) then
+      pal_addr=allocate(256*4)
+      pal_len = length(pal)
+      for i = 1 to pal_len do
+         offset = (i-1) * 4
+         poke( pal_addr + offset, pal[i])
+      end for
+
+      for i = pal_len + 1 to 256 do
+         offset = (i-1) * 4
+          poke( pal_addr + offset, {0,0,0,0})
+      end for
+      c_proc(my_set_palette, {pal_addr})
+      free(pal_addr)
+   else
+      c_proc(my_set_palette, {pal})
+   end if
+end procedure
+
+-----------------------------
+-- set_palette_range
+constant my_set_palette_range = link_proc(AllegroLib, "set_palette_range", {C_POINTER, C_INT, C_INT, C_INT} )
+global procedure set_palette_range(atom pal, integer from, integer myto, integer vsync)
+   c_proc(my_set_palette_range, {pal, from, myto, vsync})
+end procedure
+
+-----------------------------
+-- get_color
+constant my_get_color = link_proc(AllegroLib, "get_color", {C_INT, C_POINTER} )
+global function get_color(integer index)
+   atom rgb_ptr
+   sequence rgb
+
+   rgb_ptr=allocate(4)
+   c_proc(my_get_color, {index, rgb_ptr})
+   rgb = peek({rgb_ptr, 3})
+   free(rgb_ptr)
+   return rgb
+end function
+
+-----------------------------
+-- get_palette
+constant my_get_palette = link_proc(AllegroLib, "get_palette", {C_POINTER} )
+global procedure get_palette(atom pal)
+   c_proc(my_get_palette, {pal})
+end procedure
+
+-----------------------------
+-- get_palette_range
+constant my_get_palette_range = link_proc(AllegroLib, "get_palette_range", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT} )
+global procedure get_palette_range(atom source, atom dest, integer speed, integer from, integer myto)
+   c_proc(my_get_palette_range, {source, dest, speed, from, myto})
+end procedure
+
+-----------------------------
+-- fade_interpolate
+constant my_fade_interpolate = link_proc(AllegroLib, "fade_interpolate", {C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT, C_INT} )
+global procedure get_fade_interpolate(atom source, atom dest, atom output, integer pos, integer from, integer myto)
+   c_proc(my_fade_interpolate, {source, dest, output, pos, from, myto})
+end procedure
+
+-----------------------------
+-- fade_from_range
+constant my_fade_from_range = link_proc(AllegroLib, "fade_from_range", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT} )
+global procedure get_fade_from_range(atom source, atom dest, integer pos, integer from, integer myto)
+   c_proc(my_fade_from_range, {source, dest, pos, from ,myto})
+end procedure
+
+-----------------------------
+-- fade_in_range
+constant my_fade_in_range = link_proc(AllegroLib, "fade_in_range", {C_POINTER, C_INT, C_INT, C_INT} )
+global procedure get_fade_in_range(atom source, integer pos, integer from, integer myto)
+   c_proc(my_fade_in_range, {source, pos, from ,myto})
+end procedure
+
+-----------------------------
+-- fade_out_range
+constant my_fade_out_range = link_proc(AllegroLib, "fade_out_range", {C_INT, C_INT, C_INT} )
+global procedure get_fade_out_range(integer pos, integer from, integer myto)
+   c_proc(my_fade_out_range, {pos, from ,myto})
+end procedure
+
+-----------------------------
+-- fade_from
+constant my_fade_from = link_proc(AllegroLib, "fade_from", {C_POINTER,C_POINTER, C_INT} )
+global procedure get_fade_from(atom source, atom dest, integer speed)
+   c_proc(my_fade_from, {source, dest, speed})
+end procedure
+
+-----------------------------
+-- fade_in
+constant my_fade_in = link_proc(AllegroLib, "fade_in", {C_POINTER, C_INT} )
+global procedure get_fade_in(atom pal, integer speed)
+   c_proc(my_fade_in, {pal, speed})
+end procedure
+
+-----------------------------
+-- fade_out
+constant my_fade_out = link_proc(AllegroLib, "fade_out", {C_INT} )
+global procedure get_fade_out(integer speed)
+   c_proc(my_fade_out, {speed})
+end procedure
+
+-----------------------------
+-- select_palette
+constant my_select_palette = link_proc(AllegroLib, "select_palette", {C_POINTER} )
+global procedure get_select_palette(atom pal)
+   c_proc(my_select_palette, {pal})
+end procedure
+
+-----------------------------
+-- unselect_palette
+constant my_unselect_palette = link_proc(AllegroLib, "unselect_palette", {} )
+global procedure get_unselect_palette()
+   c_proc(my_unselect_palette, {})
+end procedure
+
+-----------------------------
+-- generate_332_palette
+constant my_generate_332_palette = link_proc(AllegroLib, "generate_332_palette", {C_POINTER} )
+global procedure generate_332_palette(atom pal)
+   c_proc(my_generate_332_palette, {pal})
+end procedure
+
+-----------------------------
+-- generate_optimized_palette
+-- TODO: Palette routines:
+-- TODO: int generate_optimized_palette(BITMAP *bmp, PALETTE pal, const char rsvd[PAL_SIZE]);
+
+-----------------------------
+-- default_palette
+global constant default_palette = define_c_var(AllegroLib, "default_palette")
+
+-----------------------------
+-- desktop_palette
+global constant desktop_palette = define_c_var(AllegroLib, "desktop_palette")
+
+-----------------------------
+-- black_palette
+global constant black_palette = define_c_var(AllegroLib, "black_palette")
+
+-----------------------------
+-- allocate_palette
+-- Euphoria only routine
+global function allocate_palette()
+   atom addr
+
+   addr = allocate(256*4)
+   mem_set(addr, 0, 256*4)
+   return addr
+end function
+
+-----------------------------
+-- allocate_sequence_palette
+-- Euphoria only routine
+global function allocate_sequence_palette()
+   sequence ret
+
+   ret = {}
+   for i = 1 to 256 do
+      ret = append(ret, {0,0,0,0} )
+   end for
+   return ret
+end function
+
+-----------------------------
+-- destroy_palette
+-- Euphoria only routine
+global procedure destroy_palette(atom addr)
+   free(addr)
+end procedure
+
+-----------------------------
+-- copy_palette
+-- Euphoria only routine
+global procedure copy_palette(atom source, atom dest)
+   mem_copy(dest, source, 4*256)
+end procedure
+
+-----------------------------
+-- sequence_to_palette
+-- Euphoria only routine
+global procedure sequence_to_palette(sequence pal_seq, atom pal_addr)
+   integer pal_len, offset
+
+   pal_len = length(pal_seq)
+   for i = 1 to pal_len do
+      offset = (i-1) * 4
+      poke( pal_addr + offset, pal_seq[i])
+   end for
+
+   for i = pal_len + 1 to 256 do
+      offset = (i-1) * 4
+      poke( pal_addr + offset, {0,0,0,0})
+   end for
+end procedure
+
+-----------------------------
+-- palette_to_sequence
+-- Euphoria only routine
+global function palette_to_sequence(atom pal)
+   sequence ret
+   integer offset
+
+   ret = {}
+   for i = 0 to 255 do
+      offset = pal + (i * 4)
+      ret = append(ret, { peek(i), peek(i+1), peek(i+2), peek(i+3) } )
+   end for
+   return ret
+end function
+
+
+--*************************************************
+-- true color routines
+--*************************************************
+-- TODO: All of the TrueColor routines
+
+-----------------------------
+-- makecol
+constant my_makecol = link_func(AllegroLib, "makecol", {C_INT, C_INT, C_INT}, C_INT)
+global function makecol(integer r, integer g, integer b)
+   return c_func(my_makecol,{r, g, b})
+end function
+
+
+--*************************************************
+-- Drawing primitives routines
+--*************************************************
+
+-----------------------------
+-- clear_bitmap
+constant my_clear_bitmap = link_proc(AllegroLib, "clear_bitmap", {C_POINTER})
+global procedure clear_bitmap(atom mybmp)
+   c_proc(my_clear_bitmap, {mybmp})
+end procedure
+
+-----------------------------
+-- clear_to_color
+constant my_clear_to_color = link_proc(AllegroLib, "clear_to_color", {C_POINTER, C_INT})
+global procedure clear_to_color(atom mybmp, integer color)
+   c_proc(my_clear_to_color, {mybmp, color})
+end procedure
+
+-----------------------------
+-- putpixel
+constant my_putpixel = link_proc(AllegroLib, "putpixel", {C_POINTER, C_INT, C_INT, C_INT})
+global procedure putpixel(atom bmp, integer x, integer y, integer color)
+   c_proc(my_putpixel, {bmp, x, y, color})
+end procedure
+
+-----------------------------
+-- inline_putpixel
+constant my__putpixel = link_proc(AllegroLib, "_putpixel", {C_POINTER, C_INT, C_INT, C_INT})
+global procedure inline_putpixel(atom bmp, integer x, integer y, integer color)
+   c_proc(my__putpixel, {bmp, x, y, color})
+end procedure
+
+-----------------------------
+-- inline_putpixel15
+constant my__putpixel15 = link_proc(AllegroLib, "_putpixel15", {C_POINTER, C_INT, C_INT, C_INT})
+global procedure inline_putpixel15(atom bmp, integer x, integer y, integer color)
+   c_proc(my__putpixel15, {bmp, x, y, color})
+end procedure
+
+-----------------------------
+-- inline_putpixel16
+constant my__putpixel16 = link_proc(AllegroLib, "_putpixel16", {C_POINTER, C_INT, C_INT, C_INT})
+global procedure inline_putpixel16(atom bmp, integer x, integer y, integer color)
+   c_proc(my__putpixel16, {bmp, x, y, color})
+end procedure
+
+-----------------------------
+-- inline_putpixel24
+constant my__putpixel24 = link_proc(AllegroLib, "_putpixel24", {C_POINTER, C_INT, C_INT, C_INT})
+global procedure inline_putpixel24(atom bmp, integer x, integer y, integer color)
+   c_proc(my__putpixel24, {bmp, x, y, color})
+end procedure
+
+-----------------------------
+-- inline_putpixel32
+constant my__putpixel32 = link_proc(AllegroLib, "_putpixel32", {C_POINTER, C_INT, C_INT, C_INT})
+global procedure inline_putpixel32(atom bmp, integer x, integer y, integer color)
+   c_proc(my__putpixel32, {bmp, x, y, color})
+end procedure
+
+-----------------------------
+-- getpixel
+constant my_getpixel = link_func(AllegroLib, "getpixel", {C_POINTER, C_INT, C_INT}, C_INT)
+global function getpixel(atom bmp, integer x, integer y)
+   return c_func(my_getpixel, {bmp, x, y})
+end function
+
+-----------------------------
+-- inline_getpixel
+constant my__getpixel = link_func(AllegroLib, "_getpixel", {C_POINTER, C_INT, C_INT}, C_INT)
+global function inline_getpixel(atom bmp, integer x, integer y)
+   return c_func(my__getpixel, {bmp, x, y})
+end function
+
+-----------------------------
+-- inline_getpixel15
+constant my__getpixel15 = link_func(AllegroLib, "_getpixel15", {C_POINTER, C_INT, C_INT}, C_INT)
+global function inline_getpixel15(atom bmp, integer x, integer y)
+   return c_func(my__getpixel15, {bmp, x, y})
+end function
+
+-----------------------------
+-- inline_getpixel16
+constant my__getpixel16 = link_func(AllegroLib, "_getpixel16", {C_POINTER, C_INT, C_INT}, C_INT)
+global function inline_getpixel16(atom bmp, integer x, integer y)
+   return c_func(my__getpixel16, {bmp, x, y})
+end function
+
+-----------------------------
+-- inline_getpixel24
+constant my__getpixel24 = link_func(AllegroLib, "_getpixel24", {C_POINTER, C_INT, C_INT}, C_INT)
+global function inline_getpixel24(atom bmp, integer x, integer y)
+   return c_func(my__getpixel24, {bmp, x, y})
+end function
+
+-----------------------------
+-- inline_getpixel32
+constant my__getpixel32 = link_func(AllegroLib, "_getpixel32", {C_POINTER, C_INT, C_INT}, C_INT)
+global function inline_getpixel32(atom bmp, integer x, integer y)
+   return c_func(my__getpixel32, {bmp, x, y})
+end function
+
+-----------------------------
+-- vline
+constant my_vline = link_proc(AllegroLib, "_allegro_vline", {C_POINTER, C_INT, C_INT, C_INT, C_INT} )
+global procedure vline(atom bmp, integer x, integer y1, integer y2, integer color)
+   c_proc(my_vline, {bmp, x, y1, y2, color})
+end procedure
+
+-----------------------------
+-- hline
+constant my_hline = link_proc(AllegroLib, "_allegro_hline", {C_POINTER, C_INT, C_INT, C_INT, C_INT} )
+global procedure hline(atom bmp, integer x1, integer y, integer x2, integer color)
+   c_proc(my_hline, {bmp, x1, y, x2, color})
+end procedure
+
+-----------------------------
+-- do_line
+-- TODO: Drawing primitives routines:
+-- TODO: void do_line(BITMAP *bmp, int x1, y1, x2, y2, int d, void (*proc)(BITMAP *bmp, int x, int y, int d));
+
+-----------------------------
+-- line
+constant my_line = link_proc(AllegroLib, "line", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT} )
+global procedure line(atom bmp, integer x1, integer y1, integer x2, integer y2, integer color)
+   c_proc(my_line, {bmp, x1, y1, x2, y2, color})
+end procedure
+
+-----------------------------
+-- fastline
+constant my_fastline = link_proc(AllegroLib, "fastline", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT} )
+global procedure fastline(atom bmp, integer x1, integer y1, integer x2, integer y2, integer color)
+   c_proc(my_fastline, {bmp, x1, y1, x2, y2, color})
+end procedure
+
+-----------------------------
+-- triangle
+constant my_triangle = link_proc(AllegroLib, "triangle", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure triangle(atom screen, integer x1, integer y1, integer x2, integer y2, integer x3, integer y3, integer color)
+   c_proc(my_triangle, {screen, x1, y1, x2, y2, x3, y3, color})
+end procedure
+
+-----------------------------
+-- polygon
+-- TODO: void polygon(BITMAP *bmp, int vertices, const int *points, int color);
+
+-----------------------------
+-- rect
+constant my_rect = link_proc(AllegroLib, "rect", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure rect(atom screen, integer x1, integer y1, integer x2, integer y2, integer color)
+   c_proc(my_rect, {screen, x1, y1, x2, y2, color})
+end procedure
+
+-----------------------------
+-- rectfill
+constant my_rectfill = link_proc(AllegroLib, "rectfill", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure rectfill(atom screen, integer x1, integer y1, integer x2, integer y2, integer color)
+   c_proc(my_rectfill, {screen, x1, y1, x2, y2, color})
+end procedure
+
+-----------------------------
+-- do_circle
+-- TODO: void do_circle(BITMAP *bmp, int x, int y, int radius, int d, void (*proc)(BITMAP *bmp, int x, int y, int d));
+
+-----------------------------
+-- circle
+constant my_circle = link_proc(AllegroLib, "circle", {C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure circle(atom mybmp, integer x, integer y, integer radius, integer color)
+   c_proc(my_circle, {mybmp, x, y, radius, color})
+end procedure
+
+-----------------------------
+-- circlefill
+constant my_circlefill = link_proc(AllegroLib, "circlefill", {C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure circlefill(atom screen, integer x, integer y, integer radius, integer color)
+   c_proc(my_circlefill, {screen, x, y, radius, color})
+end procedure
+
+-----------------------------
+-- do_ellipse
+-- TODO: void do_ellipse(BITMAP *bmp, int x, int y, int rx, ry, int d, void (*proc)(BITMAP *bmp, int x, int y, int d));
+
+-----------------------------
+-- ellipse
+constant my_ellipse = link_proc(AllegroLib, "ellipse", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure ellipse(atom screen, integer x, integer y, integer rx, integer ry, integer color)
+   c_proc(my_ellipse, {screen, x, y, rx, ry, color})
+end procedure
+
+-----------------------------
+-- ellipsefill
+constant my_ellipsefill = link_proc(AllegroLib, "ellipsefill", {C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure ellipsefill(atom screen, integer x, integer y, integer rx, integer ry, integer color)
+   c_proc(my_ellipsefill, {screen, x, y, rx, ry, color})
+end procedure
+
+-----------------------------
+-- do_arc
+-- TODO: void do_arc(BITMAP *bmp, int x, int y, fixed a1, fixed a2, int r, int d, void (*proc)(BITMAP *bmp, int x, int y, int d));
+
+-----------------------------
+-- arc
+constant my_arc = link_proc(AllegroLib, "ellipsefill", {C_POINTER, C_INT, C_INT, C_FLOAT, C_FLOAT, C_INT, C_INT})
+global procedure arc(atom screen, integer x, integer y, atom ang1, atom ang2, integer r, integer color)
+   c_proc(my_arc, {screen, x, y, ang1, ang2, r, color})
+end procedure
+
+-----------------------------
+-- calc_spline
+-- TODO: void calc_spline(const int points[8], int npts, int *x, int *y);
+
+-----------------------------
+-- spline
+-- TODO: void spline(BITMAP *bmp, const int points[8], int color);
+
+-----------------------------
+-- floodfill
+constant my_floodfill = link_proc(AllegroLib, "floodfill", {C_POINTER, C_INT, C_INT, C_INT})
+global procedure floodfill(atom screen, integer x, integer y, integer color)
+   c_proc(my_floodfill, {screen, x, y, color})
+end procedure
+
+
+--*************************************************
+--blitting and sprite routines
+--*************************************************
+
+-----------------------------
+-- blit
+constant my_blit = link_proc(AllegroLib, "blit", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure blit(atom source, atom dest, integer s_x, integer s_y, integer d_x, integer d_y, integer width, integer height)
+   c_proc(my_blit, {source, dest, s_x, s_y, d_x, d_y, width, height})
+end procedure
+
+-----------------------------
+-- stretch_blit
+constant my_stretch_blit = link_proc(AllegroLib, "stretch_blit", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure stretch_blit(atom source, atom dest, integer s_x, integer s_y, integer s_w, integer s_h, integer d_x, integer d_y, integer d_w, integer d_h)
+   c_proc(my_stretch_blit, {source, dest, s_x, s_y, s_w, s_h, d_x, d_y, d_w, d_h})
+end procedure
+
+-----------------------------
+-- masked_blit
+constant my_masked_blit = link_proc(AllegroLib, "masked_blit", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure masked_blit(atom source, atom dest, integer s_x, integer s_y, integer d_x, integer d_y, integer width, integer height)
+   c_proc(my_masked_blit, {source, dest, s_x, s_y, d_x, d_y, width, height})
+end procedure
+
+-----------------------------
+-- masked_stretch_blit
+constant my_masked_stretch_blit = link_proc(AllegroLib, "stretch_blit", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure masked_stretch_blit(atom source, atom dest, integer s_x, integer s_y, integer s_w, integer s_h, integer d_x, integer d_y, integer d_w, integer d_h)
+   c_proc(my_masked_stretch_blit, {source, dest, s_x, s_y, s_w, s_h, d_x, d_y, d_w, d_h})
+end procedure
+
+-----------------------------
+-- draw_sprite
+constant my_draw_sprite = link_proc(AllegroLib, "draw_sprite", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_sprite(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_sprite, {bmp, sprite, x, y})
+end procedure
+
+-----------------------------
+-- stretch_sprite
+constant my_stretch_sprite = link_proc(AllegroLib, "stretch_sprite", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure stretch_sprite(atom bmp, atom sprite, integer x, integer y, integer w, integer h)
+   c_proc(my_stretch_sprite, {bmp, sprite, x, y, w, h})
+end procedure
+
+-----------------------------
+-- draw_sprite_v_flip
+constant my_draw_sprite_v_flip = link_proc(AllegroLib, "draw_sprite_v_flip", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_sprite_v_flip(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_sprite_v_flip, {bmp, sprite, x, y})
+end procedure
+
+-----------------------------
+-- draw_sprite_h_flip
+constant my_draw_sprite_h_flip = link_proc(AllegroLib, "draw_sprite_h_flip", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_sprite_h_flip(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_sprite_h_flip, {bmp, sprite, x, y})
+end procedure
+
+-----------------------------
+-- draw_sprite_vh_flip
+constant my_draw_sprite_vh_flip = link_proc(AllegroLib, "draw_sprite_vh_flip", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_sprite_vh_flip(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_sprite_vh_flip, {bmp, sprite, x, y})
+end procedure
+
+-----------------------------
+-- draw_trans_sprite
+constant my_draw_trans_sprite = link_proc(AllegroLib, "draw_trans_sprite", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_trans_sprite(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_trans_sprite,{bmp, sprite, x, y})
+end procedure
+
+-----------------------------
+-- draw_lit_sprite
+constant my_draw_lit_sprite = link_proc(AllegroLib, "draw_lit_sprite", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT})
+global procedure draw_lit_sprite(atom bmp, atom sprite, integer x, integer y, integer color)
+   c_proc(my_draw_lit_sprite,{bmp, sprite, x, y, color})
+end procedure
+
+-----------------------------
+-- draw_gouraud_sprite
+constant my_draw_gouraud_sprite = link_proc(AllegroLib, "draw_gouraud_sprite", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT})
+global procedure draw_gouraud_sprite(atom bmp, atom sprite, integer x, integer y, integer c1, integer c2, integer c3, integer c4)
+   c_proc(my_draw_gouraud_sprite,{bmp, sprite, x, y, c1, c2, c3, c4})
+end procedure
+
+-----------------------------
+-- draw_character_ex
+constant my_draw_character_ex = link_proc(AllegroLib, "draw_character_ex", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT})
+global procedure draw_character_ex(atom bmp, atom sprite, integer x, integer y, integer bgcolor)
+   c_proc(my_draw_character_ex, {bmp, sprite, x, y, bgcolor})
+end procedure
+
+-----------------------------
+-- rotate_sprite
+constant my_rotate_sprite = link_proc(AllegroLib, "rotate_sprite", {C_POINTER, C_POINTER, C_INT, C_INT, C_FLOAT})
+global procedure rotate_sprite(atom bmp, atom sprite, integer x, integer y, atom angle)
+   c_proc(my_rotate_sprite, {bmp, sprite, x, y, angle})
+end procedure
+
+-----------------------------
+-- rotate_sprite_v_flip
+constant my_rotate_sprite_v_flip = link_proc(AllegroLib, "rotate_sprite_v_flip", {C_POINTER, C_POINTER, C_INT, C_INT, C_FLOAT})
+global procedure rotate_sprite_v_flip(atom bmp, atom sprite, integer x, integer y, atom angle)
+   c_proc(my_rotate_sprite_v_flip, {bmp, sprite, x, y, angle})
+end procedure
+
+-----------------------------
+-- rotate_scaled_sprite
+constant my_rotate_scaled_sprite = link_proc(AllegroLib, "rotate_scaled_sprite", {C_POINTER, C_POINTER, C_INT, C_INT, C_FLOAT, C_FLOAT})
+global procedure rotate_scaled_sprite(atom bmp, atom sprite, integer x, integer y, atom angle, atom scale)
+   c_proc(my_rotate_scaled_sprite, {bmp, sprite, x, y, angle, scale})
+end procedure
+
+-----------------------------
+-- rotate_scaled_sprite_v_flip
+constant my_rotate_scaled_sprite_v_flip = link_proc(AllegroLib, "rotate_scaled_sprite_v_flip", {C_POINTER, C_POINTER, C_INT, C_INT, C_FLOAT, C_FLOAT})
+global procedure rotate_scaled_sprite_v_flip(atom bmp, atom sprite, integer x, integer y, atom angle, atom scale)
+   c_proc(my_rotate_scaled_sprite_v_flip, {bmp, sprite, x, y, angle, scale})
+end procedure
+
+-----------------------------
+-- pivot_sprite
+constant my_pivot_sprite = link_proc(AllegroLib, "pivot_sprite", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_FLOAT})
+global procedure pivot_sprite(atom bmp, atom sprite, integer x, integer y, integer cx, integer cy, atom angle)
+   c_proc(my_pivot_sprite, {bmp, sprite, x, y, cx, cy, angle})
+end procedure
+
+-----------------------------
+-- pivot_sprite_v_flip
+constant my_pivot_sprite_v_flip = link_proc(AllegroLib, "pivot_sprite_v_flip", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_FLOAT})
+global procedure pivot_sprite_v_flip(atom bmp, atom sprite, integer x, integer y, integer cx, integer cy, atom angle)
+   c_proc(my_pivot_sprite_v_flip, {bmp, sprite, x, y, cx, cy, angle})
+end procedure
+
+-----------------------------
+-- pivot_scaled_sprite
+constant my_pivot_scaled_sprite = link_proc(AllegroLib, "pivot_scaled_sprite", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_FLOAT, C_FLOAT})
+global procedure pivot_scaled_sprite(atom bmp, atom sprite, integer x, integer y, integer cx, integer cy, atom angle, atom scale)
+   c_proc(my_pivot_scaled_sprite, {bmp, sprite, x, y, cx, cy, angle, scale})
+end procedure
+
+-----------------------------
+-- pivot_scaled_sprite_v_flip
+constant my_pivot_scaled_sprite_v_flip = link_proc(AllegroLib, "pivot_scaled_sprite_v_flip", {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_FLOAT, C_FLOAT})
+global procedure pivot_scaled_sprite_v_flip(atom bmp, atom sprite, integer x, integer y, integer cx, integer cy, atom angle, atom scale)
+   c_proc(my_pivot_scaled_sprite_v_flip, {bmp, sprite, x, y, cx, cy, angle, scale})
+end procedure
+
+
+--*************************************************
+-- rle sprite routines
+--*************************************************
+
+-----------------------------
+-- get_rle_sprite
+constant my_get_rle_sprite = link_func(AllegroLib, "get_rle_sprite", {C_POINTER}, C_POINTER)
+global function get_rle_sprite(atom bmp)
+   return c_func(my_get_rle_sprite, {bmp})
+end function
+
+-----------------------------
+-- destroy_rle_sprite
+constant my_destroy_rle_sprite = link_proc(AllegroLib, "destroy_rle_sprite", {C_POINTER})
+global procedure destroy_rle_sprite(atom sprite)
+   c_proc(my_destroy_rle_sprite, {sprite})
+end procedure
+
+-----------------------------
+-- draw_rle_sprite
+constant my_draw_rle_sprite = link_proc(AllegroLib, "draw_rle_sprite", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_rle_sprite(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_rle_sprite, {bmp, sprite, x, y})
+end procedure
+
+-----------------------------
+-- draw_trans_rle_sprite
+constant my_draw_trans_rle_sprite = link_proc(AllegroLib, "draw_trans_rle_sprite", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_trans_rle_sprite(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_trans_rle_sprite, {bmp, sprite, x, y})
+end procedure
+
+-----------------------------
+-- draw_lit_rle_sprite
+constant my_draw_lit_rle_sprite = link_proc(AllegroLib, "draw_lit_rle_sprite", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_lit_rle_sprite(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_lit_rle_sprite, {bmp, sprite, x, y})
+end procedure
+
+
+--*************************************************
+-- compiled sprite routines
+--*************************************************
+
+-----------------------------
+-- get_compiled_sprite
+constant my_get_compiled_sprite = link_func(AllegroLib, "get_compiled_sprite", {C_POINTER, C_INT}, C_POINTER)
+global function get_compiled_sprite(atom bmp, integer planar)
+   return c_func(my_get_compiled_sprite, {bmp, planar})
+end function
+
+-----------------------------
+-- destroy_compiled_sprite
+constant my_destroy_compiled_sprite = link_proc(AllegroLib, "destroy_compiled_sprite", {C_POINTER})
+global procedure destroy_compiled_sprite(atom sprite)
+   c_proc(my_destroy_compiled_sprite, {sprite})
+end procedure
+
+-----------------------------
+-- draw_compiled_sprite
+constant my_draw_compiled_sprite = link_proc(AllegroLib, "draw_compiled_sprite", {C_POINTER, C_POINTER, C_INT, C_INT})
+global procedure draw_compiled_sprite(atom bmp, atom sprite, integer x, integer y)
+   c_proc(my_draw_compiled_sprite, {bmp, sprite, x, y})
+end procedure
+
+
+--*************************************************
+-- Font routines
+--*************************************************
+-- TODO: All of the Font routines
+
+-----------------------------
+-- destroy_font
+constant my_destroy_font = link_proc(AllegroLib, "destroy_font", {C_POINTER})
+global procedure destroy_font(atom myfont)
+   c_proc(my_destroy_font, {myfont})
+end procedure
+
+
+--*************************************************
+-- text output routines
+--*************************************************
+
+-----------------------------
+-- font
+global constant font = peek4u(define_c_var(AllegroLib, "font"))
+
+-----------------------------
+-- allegro_404_char
+global constant allegro_404_char = '*'
+
+-----------------------------
+-- text_length
+constant my_text_length = link_func(AllegroLib, "text_length", {C_POINTER, C_POINTER}, C_INT)
+global function text_length(atom myfont, sequence str)
+   atom str_addr
+   integer ret
+
+   str_addr = allocate_string(str)
+   ret = c_func(my_text_length, {myfont, str_addr})
+   free(str_addr)
+   return ret
+end function
+
+-----------------------------
+-- text_height
+constant my_text_height = link_func(AllegroLib, "text_height", {C_POINTER}, C_INT)
+global function text_height(atom myfont)
+   return c_func(my_text_height, {myfont})
+end function
+
+-----------------------------
+-- textout_ex
+constant my_textout_ex = link_proc(AllegroLib, "textout_ex", {C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure textout_ex(atom mybmp, atom myfont, sequence msg, integer x, integer y, integer c, integer bg)
+   atom msg_ptr
+
+   msg_ptr = allocate_string(msg)
+   c_proc(my_textout_ex, {mybmp, myfont, msg_ptr, x, y, c, bg})
+   free(msg_ptr)
+end procedure
+
+-----------------------------
+-- textout_centre_ex
+constant my_textout_centre_ex = link_proc(AllegroLib, "textout_centre_ex", {C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure textout_centre_ex(atom mybmp, atom myfont, sequence msg, integer x, integer y, integer c, integer bg)
+   atom msg_ptr
+
+   msg_ptr = allocate_string(msg)
+   c_proc(my_textout_centre_ex, {mybmp, myfont, msg_ptr, x, y, c, bg})
+   free(msg_ptr)
+end procedure
+
+-----------------------------
+-- textout_right_ex
+constant my_textout_right_ex = link_proc(AllegroLib, "textout_right_ex", {C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure textout_right_ex(atom mybmp, atom myfont, sequence msg, integer x, integer y, integer c, integer bg)
+   atom msg_ptr
+
+   msg_ptr = allocate_string(msg)
+   c_proc(my_textout_right_ex, {mybmp, myfont, msg_ptr, x, y, c, bg})
+   free(msg_ptr)
+end procedure
+
+-----------------------------
+-- textout_justify_ex
+constant my_textout_justify_ex = link_proc(AllegroLib, "textout_justify_ex", {C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure textout_justify_ex(atom mybmp, atom myfont, sequence msg, integer x1, integer x2, integer diff, integer y, integer c, integer bg)
+   atom msg_ptr
+
+   msg_ptr = allocate_string(msg)
+   c_proc(my_textout_justify_ex, {mybmp, myfont, msg_ptr, x1, x2, y, diff, c, bg})
+   free(msg_ptr)
+end procedure
+
+-----------------------------
+-- textprintf_ex
+-- emulate by calling textout
+global procedure textprintf_ex(atom mybmp, atom myfont, integer x, integer y, integer c, integer bg, sequence msg, sequence fmt)
+   textout_ex(mybmp, myfont, sprintf(msg, fmt), x, y, c, bg)
+end procedure
+
+-----------------------------
+-- textprintf_centre_ex
+-- emulate by calling textout_centre
+global procedure textprintf_centre_ex(atom mybmp, atom myfont, integer x, integer y, integer c, integer bg, sequence msg, sequence fmt)
+   textout_centre_ex(mybmp, myfont, sprintf(msg, fmt), x, y, c, bg)
+end procedure
+
+-----------------------------
+-- textprintf_right_ex
+-- emulate by calling textout_right_ex
+global procedure textprintf_right_ex(atom mybmp, atom myfont, integer x, integer y, integer c, integer bg, sequence msg, sequence fmt)
+   textout_right_ex(mybmp, myfont, sprintf(msg, fmt), x, y, c, bg)
+end procedure
+
+-----------------------------
+-- textprintf_justify
+-- emulate by calling textout_justify
+global procedure textprintf_justify(atom mybmp, atom myfont, integer x1, integer x2, integer y, integer diff, integer c, integer bg, sequence msg, sequence fmt)
+   textout_justify_ex(mybmp, myfont, sprintf(msg, fmt), x1, x2, y, diff, c, bg)
+end procedure
+
+
+--*************************************************
+-- Polygon rendering routines
+--*************************************************
+-- TODO: All of the Polygon rendering routines
+
+
+--*************************************************
+-- Transparent and patterned drawing routines
+--*************************************************
+
+-- drawing modes
+global constant
+   DRAW_MODE_SOLID          = 0,
+   DRAW_MODE_XOR            = 1,
+   DRAW_MODE_COPY_PATTERN   = 2,
+   DRAW_MODE_SOLID_PATTERN  = 3,
+   DRAW_MODE_MASKED_PATTERN = 4,
+   DRAW_MODE_TRANS          = 5
+
+-----------------------------
+-- drawing_mode
+constant my_drawing_mode = link_proc(AllegroLib, "drawing_mode", {C_INT, C_POINTER, C_INT, C_INT})
+global procedure drawing_mode(integer mode, atom mybmp, integer x_anchor, integer y_anchor)
+   c_proc(my_drawing_mode, {mode, mybmp, x_anchor, y_anchor})
+end procedure
+
+-----------------------------
+-- xor_mode
+global procedure xor_mode(integer on)
+   if on > 0 then
+      drawing_mode(DRAW_MODE_XOR, NULL, 0, 0)
+   else
+      drawing_mode(DRAW_MODE_SOLID, NULL, 0, 0)
+   end if
+end procedure
+
+-----------------------------
+-- solid_mode
+global procedure solid_mode()
+   drawing_mode(DRAW_MODE_SOLID, NULL, 0, 0)
+end procedure
+
+
+-----------------------------
+-- COLOR_MAP
+-- TODO: Transparent and patterned drawing routines:
+-- TODO: extern COLOR_MAP *color_map;
+
+-----------------------------
+-- create_trans_table
+-- TODO: void create_trans_table(COLOR_MAP *table, const PALETTE pal, int r, g, b, void (*callback)(int pos));
+
+-----------------------------
+-- create_light_table
+-- TODO: void create_light_table(COLOR_MAP *table, const PALETTE pal, int r, g, b, void (*callback)(int pos));
+
+-----------------------------
+-- create_color_table
+-- TODO: void create_color_table(COLOR_MAP *table, const PALETTE pal, void (*blend)(PALETTE pal, int x, int y, RGB *rgb), void (*callback)(int pos));
+
+-----------------------------
+-- create_blender_table
+-- TODO: void create_blender_table(COLOR_MAP *table, const PALETTE pal, void (*callback)(int pos));
+
+-----------------------------
+-- set_trans_blender
+constant my_set_trans_blender = link_proc(AllegroLib, "set_trans_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_trans_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_trans_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_alpha_blender
+constant my_set_alpha_blender = link_proc(AllegroLib, "set_alpha_blender", {})
+global procedure set_alpha_blender()
+   c_proc(my_set_alpha_blender,{})
+end procedure
+
+-----------------------------
+-- set_write_alpha_blender
+constant my_set_write_alpha_blender = link_proc(AllegroLib, "set_write_alpha_blender", {})
+global procedure set_write_alpha_blender()
+   c_proc(my_set_write_alpha_blender,{})
+end procedure
+
+-----------------------------
+-- set_add_blender
+constant my_set_add_blender = link_proc(AllegroLib, "set_add_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_add_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_add_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_burn_blender
+constant my_set_burn_blender = link_proc(AllegroLib, "set_burn_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_burn_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_burn_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_color_blender
+constant my_set_color_blender = link_proc(AllegroLib, "set_color_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_color_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_color_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_difference_blender
+constant my_set_difference_blender = link_proc(AllegroLib, "set_difference_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_difference_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_difference_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_dissolve_blender
+constant my_set_dissolve_blender = link_proc(AllegroLib, "set_dissolve_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_dissolve_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_dissolve_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_dodge_blender
+constant my_set_dodge_blender = link_proc(AllegroLib, "set_dodge_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_dodge_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_dodge_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_hue_blender
+constant my_set_hue_blender = link_proc(AllegroLib, "set_hue_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_hue_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_hue_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_invert_blender
+constant my_set_invert_blender = link_proc(AllegroLib, "set_invert_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_invert_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_invert_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_luminance_blender
+constant my_set_luminance_blender = link_proc(AllegroLib, "set_luminance_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_luminance_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_luminance_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_multiply_blender
+constant my_set_multiply_blender = link_proc(AllegroLib, "set_multiply_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_multiply_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_multiply_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_saturation_blender
+constant my_set_saturation_blender = link_proc(AllegroLib, "set_saturation_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_saturation_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_saturation_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_screen_blender
+constant my_set_screen_blender = link_proc(AllegroLib, "set_screen_blender", {C_INT, C_INT, C_INT, C_INT})
+global procedure set_screen_blender(integer r, integer g, integer b, integer a)
+   c_proc(my_set_screen_blender,{r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_blender_mode
+constant my_set_blender_mode = link_proc(AllegroLib, "set_blender_mode", {C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure set_blender_mode(atom bf15, atom bf16, atom bf24, integer r, integer g, integer b, integer a)
+   c_proc(my_set_blender_mode,{bf15, bf16, bf24, r, g, b, a})
+end procedure
+
+-----------------------------
+-- set_blender_mode_ex
+constant my_set_blender_mode_ex = link_proc(AllegroLib, "set_blender_mode_ex", {C_POINTER, C_POINTER, C_POINTER, C_POINTER, C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure set_blender_mode_ex(atom bf15, atom bf16, atom bf24, atom bf32, atom bf15x, atom bf16x, atom bf24x, integer r, integer g, integer b, integer a)
+   c_proc(my_set_blender_mode_ex,{bf15, bf16, bf24, bf32, bf15x, bf16x, bf24x, g, b, a})
+end procedure
+
+
+--*************************************************
+-- Converting between color formats routines
+--*************************************************
+-- TODO: All of the Converting between color formats
+
+
+--*************************************************
+-- Direct access to video memory routines
+--*************************************************
+-- TODO: All of Direct access to video memory
+
+
+--*************************************************
+-- FLIC routines
+--*************************************************
+-- TODO: All of FLIC routines
+
+
+--*************************************************
+-- sound init routines
+--*************************************************
+
+-- sound constants
+global constant
+  DIGI_AUTODETECT   = -1,
+  DIGI_NONE         = 0,
+
+  MIDI_AUTODETECT   = -1,
+  MIDI_NONE         = 0,
+  MIDI_DIGMID       = AL_ID('D','I','G','I')
+
+global constant
+   digi_driver      = define_c_var(AllegroLib,"digi_driver"),
+   midi_driver      = define_c_var(AllegroLib,"midi_driver")
+
+-----------------------------
+-- detect_digi_driver
+constant my_detect_digi_driver = link_func(AllegroLib, "detect_digi_driver", {C_INT}, C_INT)
+global function detect_digi_driver(integer digi)
+   return c_func(my_detect_digi_driver,{digi})
+end function
+
+-----------------------------
+-- detect_midi_driver
+constant my_detect_midi_driver = link_func(AllegroLib, "detect_midi_driver", {C_INT}, C_INT)
+global function detect_midi_driver(integer midi)
+   return c_func(my_detect_midi_driver,{midi})
+end function
+
+-----------------------------
+-- reserve_voices
+constant my_reserve_voices = link_func(AllegroLib, "reserve_voices", {C_INT, C_INT}, C_INT)
+global function reserve_voices(integer digi, integer midi)
+   return c_func(my_reserve_voices,{digi, midi})
+end function
+
+-----------------------------
+-- set_volume_per_voice
+constant my_set_volume_per_voice = link_proc(AllegroLib, "set_volume_per_voice", {C_INT})
+global procedure set_volume_per_voice(integer scale)
+   c_proc(my_set_volume_per_voice,{scale})
+end procedure
+
+-----------------------------
+-- install_sound
+constant my_install_sound = link_func(AllegroLib, "install_sound", {C_INT, C_INT, C_POINTER}, C_INT)
+global function install_sound(integer digi, integer midi, sequence path)
+   atom path_addr
+   integer ret
+
+   path_addr = allocate_string(path)
+   ret = c_func(my_install_sound,{digi, midi, path_addr})
+   free(path_addr)
+   return ret
+end function
+
+-----------------------------
+-- remove_sound
+constant my_remove_sound = link_proc(AllegroLib, "remove_sound", {})
+global procedure remove_sound()
+   c_proc(my_remove_sound,{})
+end procedure
+
+-----------------------------
+-- set_volume
+constant my_set_volume = link_proc(AllegroLib, "set_volume", {C_INT, C_INT})
+global procedure set_volume(integer digi, integer midi)
+   c_proc(my_set_volume,{digi, midi})
+end procedure
+
+-----------------------------
+-- set_hardware_volume
+constant my_set_hardware_volume = link_proc(AllegroLib, "set_hardware_volume", {C_INT, C_INT})
+global procedure set_hardware_volume(integer digiv, integer midiv)
+   c_proc(my_set_hardware_volume,{digiv, midiv})
+end procedure
+
+
+--*************************************************
+-- mixer routines
+--*************************************************
+
+-----------------------------
+-- set_mixer_quality
+constant my_set_mixer_quality = link_proc(AllegroLib, "set_mixer_quality", {C_INT})
+global procedure set_mixer_quality(integer quality)
+   c_proc(my_set_mixer_quality,{quality})
+end procedure
+
+-----------------------------
+-- get_mixer_quality
+constant my_get_mixer_quality = link_func(AllegroLib, "get_mixer_quality", {}, C_INT)
+global function get_mixer_quality()
+   return c_func(my_get_mixer_quality,{})
+end function
+
+-----------------------------
+-- get_mixer_frequency
+constant my_get_mixer_frequency = link_func(AllegroLib, "get_mixer_frequency", {}, C_INT)
+global function get_mixer_frequency()
+   return c_func(my_get_mixer_frequency,{})
+end function
+
+-----------------------------
+-- get_mixer_bits
+constant my_get_mixer_bits = link_func(AllegroLib, "get_mixer_bits", {}, C_INT)
+global function get_mixer_bits()
+   return c_func(my_get_mixer_bits,{})
+end function
+
+-----------------------------
+-- get_mixer_channels
+constant my_get_mixer_channels = link_func(AllegroLib, "get_mixer_channels", {}, C_INT)
+global function get_mixer_channels()
+   return c_func(my_get_mixer_channels,{})
+end function
+
+-----------------------------
+-- get_mixer_voices
+constant my_get_mixer_voices = link_func(AllegroLib, "get_mixer_voices", {}, C_INT)
+global function get_mixer_voices()
+   return c_func(my_get_mixer_voices,{})
+end function
+
+-----------------------------
+-- get_mixer_voices
+constant my_get_mixer_buffer_length = link_func(AllegroLib, "get_mixer_buffer_length", {}, C_INT)
+global function get_mixer_buffer_length()
+   return c_func(my_get_mixer_buffer_length,{})
+end function
+
+
+--*************************************************
+-- digital sample routines
+--*************************************************
+
+-----------------------------
+-- load_sample
+constant my_load_sample = link_func(AllegroLib, "load_sample", {C_POINTER}, C_POINTER)
+global function load_sample(sequence filename)
+   atom filename_addr
+   integer ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_sample,{filename_addr})
+   free(filename_addr)
+   return ret
+end function
+
+-----------------------------
+-- load_wav
+constant my_load_wav = link_func(AllegroLib, "load_wav", {C_POINTER}, C_POINTER)
+global function load_wav(sequence filename)
+   atom filename_addr
+   integer ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_wav,{filename_addr})
+   free(filename_addr)
+   return ret
+end function
+
+-----------------------------
+-- load_wav_pf
+constant my_load_wav_pf = link_func(AllegroLib, "load_wav_pf", {C_POINTER}, C_POINTER)
+global function load_wav_pf(atom packfile)
+   return c_func(my_load_wav_pf,{packfile})
+end function
+
+-----------------------------
+-- load_voc
+constant my_load_voc = link_func(AllegroLib, "load_voc", {C_POINTER}, C_POINTER)
+global function load_voc(sequence filename)
+   atom filename_addr
+   integer ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_voc,{filename_addr})
+   free(filename_addr)
+   return ret
+end function
+
+-----------------------------
+-- load_voc_pf
+constant my_load_voc_pf = link_func(AllegroLib, "load_voc_pf", {C_POINTER}, C_POINTER)
+global function load_voc_pf(atom packfile)
+   return c_func(my_load_voc_pf,{packfile})
+end function
+
+-----------------------------
+-- save_sample
+constant my_save_sample = link_func(AllegroLib, "save_sample", {C_POINTER, C_POINTER}, C_INT)
+global function save_sample(sequence filename, atom sample)
+   integer ret
+   atom filename_addr
+
+   filename_addr=allocate_string(filename)
+   ret = c_func(my_save_sample,{filename_addr, sample})
+   free(filename_addr)
+   return ret
+end function
+
+-----------------------------
+-- create_sample
+constant my_create_sample = link_func(AllegroLib, "create_sample", {C_INT, C_INT, C_INT, C_INT}, C_POINTER)
+global function create_sample(integer bits, integer stereo, integer freq, integer len)
+   return c_func(my_create_sample,{bits, stereo, freq, len})
+end function
+
+-----------------------------
+-- destroy_sample
+constant my_destroy_sample = link_proc(AllegroLib, "destroy_sample", {C_POINTER})
+global procedure destroy_sample(atom sample)
+   c_proc(my_destroy_sample,{sample})
+end procedure
+
+-----------------------------
+-- register_sample_file_type
+-- TODO: Digital Sample routines:
+-- TODO: void register_sample_file_type(const char *ext, SAMPLE *(*load)(const char *filename), int (*save)(const char *filename, SAMPLE *spl));
+
+-----------------------------
+-- play_sample
+constant my_play_sample = link_func(AllegroLib, "play_sample", {C_POINTER, C_INT, C_INT, C_INT, C_INT}, C_INT)
+global function play_sample(atom sample, integer vol, integer pan, integer freq, integer loop)
+   return c_func(my_play_sample,{sample, vol, pan, freq, loop})
+end function
+
+-----------------------------
+-- adjust_sample
+constant my_adjust_sample = link_proc(AllegroLib, "adjust_sample", {C_POINTER, C_INT, C_INT, C_INT, C_INT})
+global procedure adjust_sample(atom sample, integer vol, integer pan, integer freq, integer loop)
+   c_proc(my_adjust_sample,{sample, vol, pan, freq, loop})
+end procedure
+
+-----------------------------
+-- stop_sample
+constant my_stop_sample = link_proc(AllegroLib, "stop_sample", {C_POINTER})
+global procedure stop_sample(atom sample)
+   c_proc(my_stop_sample,{sample})
+end procedure
+
+-----------------------------
+-- TODO: All of Voice routines in Digital sample routines
+
+
+--*************************************************
+-- midi music routines
+--*************************************************
+
+-----------------------------
+-- load_midi
+constant my_load_midi = link_func(AllegroLib, "load_midi", {C_POINTER}, C_POINTER)
+global function load_midi(sequence filename)
+   atom filename_addr
+   integer ret
+
+   filename_addr = allocate_string(filename)
+   ret = c_func(my_load_midi,{filename_addr})
+   free(filename_addr)
+   return ret
+end function
+
+-----------------------------
+-- destroy_midi
+constant my_destroy_midi = link_proc(AllegroLib, "destroy_midi", {C_POINTER})
+global procedure destroy_midi(atom midi)
+   c_proc(my_destroy_midi,{midi})
+end procedure
+
+-----------------------------
+-- play_midi
+constant my_play_midi = link_func(AllegroLib, "play_midi", {C_POINTER, C_INT}, C_INT)
+global function play_midi(atom midi, integer loop)
+   return c_func(my_play_midi,{midi, loop})
+end function
+
+-----------------------------
+-- play_looped_midi
+constant my_play_looped_midi = link_func(AllegroLib, "play_looped_midi", {C_POINTER, C_INT, C_INT}, C_INT)
+global function play_looped_midi(atom midi, integer loop_start, integer loop_end)
+   return c_func(my_play_looped_midi,{midi, loop_start, loop_end})
+end function
+
+-----------------------------
+-- stop_midi
+constant my_stop_midi = link_proc(AllegroLib, "stop_midi", {})
+global procedure stop_midi()
+   c_proc(my_stop_midi,{})
+end procedure
+
+-----------------------------
+-- midi_pause
+constant my_midi_pause = link_proc(AllegroLib, "midi_pause", {})
+global procedure midi_pause()
+   c_proc(my_midi_pause,{})
+end procedure
+
+-----------------------------
+-- midi_resume
+constant my_midi_resume = link_proc(AllegroLib, "midi_resume", {})
+global procedure midi_resume()
+   c_proc(my_midi_resume,{})
+end procedure
+
+-----------------------------
+-- midi_seek
+constant my_midi_seek = link_func(AllegroLib, "midi_seek", {C_INT}, C_INT)
+global function midi_seek(integer target)
+   return c_func(my_midi_seek,{target})
+end function
+
+-----------------------------
+-- get_midi_length
+constant my_get_midi_length = link_func(AllegroLib, "get_midi_length", {C_POINTER}, C_INT)
+global function get_midi_length(atom midi)
+   return c_func(my_get_midi_length,{midi})
+end function
+
+-----------------------------
+-- midi_out
+constant my_midi_out = link_proc(AllegroLib, "midi_out", {C_POINTER, C_INT})
+global procedure midi_out(sequence data, integer len)
+   atom data_addr
+
+   data_addr = allocate(data)
+   c_proc(my_midi_out,{data_addr, len})
+   free(data_addr)
+end procedure
+
+-----------------------------
+-- load_midi_patches
+constant my_load_midi_patches = link_func(AllegroLib, "load_midi_patches", {}, C_INT)
+global function load_midi_patches()
+   return c_func(my_load_midi_patches,{})
+end function
+
+-----------------------------
+-- extern's
+-- TODO: Midi routines (MIDI):
+-- TODO: extern volatile long midi_pos;
+-- TODO: extern volatile long midi_time;
+-- TODO: extern long midi_loop_start;
+-- TODO: extern long midi_loop_end;
+-- TODO: extern void (*midi_msg_callback)(int msg, int byte1, int byte2);
+-- TODO: extern void (*midi_meta_callback)(int type, const unsigned char *data, int length);
+-- TODO: extern void (*midi_sysex_callback)(const unsigned char *data, int length);
+-- TODO: int load_ibk(char *filename, int drums);
+
+
+--*************************************************
+-- Audio stream routines
+--*************************************************
+
+-----------------------------
+-- play_audio_stream
+constant my_play_audio_stream = link_func(AllegroLib, "play_audio_stream", {C_INT, C_INT, C_INT, C_INT, C_INT, C_INT}, C_POINTER)
+global function play_audio_stream(integer len, integer bits, integer stereo, integer freq, integer vol, integer pan)
+   return c_func(my_play_audio_stream,{len, bits, stereo, freq, vol, pan})
+end function
+
+-----------------------------
+-- stop_audio_stream
+constant my_stop_audio_stream = link_proc(AllegroLib, "stop_audio_stream", {C_POINTER})
+global function stop_audio_stream(atom stream)
+   return c_func(my_stop_audio_stream,{stream})
+end function
+
+-----------------------------
+-- get_audio_stream_buffer
+constant my_get_audio_stream_buffer = link_proc(AllegroLib, "get_audio_stream_buffer", {C_POINTER})
+global function get_audio_stream_buffer(atom stream)
+   return c_func(my_get_audio_stream_buffer,{stream})
+end function
+
+-----------------------------
+-- free_audio_stream_buffer
+constant my_free_audio_stream_buffer = link_proc(AllegroLib, "free_audio_stream_buffer", {C_POINTER})
+global function free_audio_stream_buffer(atom stream)
+   return c_func(my_free_audio_stream_buffer,{stream})
+end function
+
+
+--*************************************************
+-- Recording routines
+--*************************************************
+-- TODO: All of the Recording routines
+
+
+--*************************************************
+-- File and compression routines
+--*************************************************
+-- TODO: All of File and compression routines
+
+-----------------------------
+-- get_executable_name
+constant my_get_executable_name = link_proc(AllegroLib, "get_executable_name", {C_POINTER, C_INT})
+global function get_executable_name(integer size)
+   atom addr
+   sequence ret
+
+   addr = allocate(size)
+   c_proc(my_get_executable_name,{addr, size})
+   ret = peek_sequence(addr, size)
+   free(addr)
+   return ret
+end function
+
+-----------------------------
+-- fix_filename_case
+constant my_fix_filename_case = link_func(AllegroLib, "fix_filename_case", {C_POINTER}, C_POINTER)
+global function fix_filename_case(sequence path)
+   atom path_addr, ret_addr
+   sequence ret
+   integer l
+
+   l = length(path)
+   path_addr = allocate_string(path)
+   ret_addr = allocate(l+1)
+   ret_addr = c_func(my_fix_filename_case,{path_addr})
+   ret = peek_sequence(ret_addr, l)
+   free(path_addr)
+   free(ret_addr)
+   return ret
+end function
+
+-----------------------------
+-- fix_filename_slashes
+constant my_fix_filename_slashes = link_func(AllegroLib, "fix_filename_slashes", {C_POINTER}, C_POINTER)
+global function fix_filename_slashes(sequence path)
+   atom path_addr, ret_addr
+   sequence ret
+   integer l
+
+   l = length(path)
+   path_addr = allocate_string(path)
+   ret_addr = allocate(l+1)
+   ret_addr = c_func(my_fix_filename_slashes,{path_addr})
+   ret = peek_sequence(ret_addr, l)
+   free(path_addr)
+   free(ret_addr)
+   return ret
+end function
+
+
+--*************************************************
+-- datafile routines
+--*************************************************
+
+-----------------------------
+-- load_datafile
+constant my_load_datafile = link_func(AllegroLib, "load_datafile", {C_POINTER}, C_POINTER)
+global function load_datafile(sequence filename)
+   atom filename_addr
+   atom ret
+
+   filename_addr = allocate_string(filename)
+   ret   = c_func(my_load_datafile, {filename_addr})
+   free(filename_addr)
+
+   return ret
+end function
+
+-----------------------------
+-- load_datafile_callback
+-- TODO: Datafile routines:
+-- TODO: DATAFILE *load_datafile_callback(const char *filename, void (*callback)(DATAFILE *d));
+
+-----------------------------
+-- unload_datafile
+constant my_unload_datafile = link_proc(AllegroLib, "unload_datafile", {C_POINTER})
+global procedure unload_datafile(atom mydatafile)
+   c_proc(my_unload_datafile, {mydatafile})
+end procedure
+
+-----------------------------
+-- load_datafile_object
+constant my_load_datafile_object = link_func(AllegroLib, "load_datafile_object", {C_POINTER, C_POINTER}, C_POINTER)
+global function load_datafile_object(sequence filename, sequence objectname)
+   atom ret
+   atom filename_addr, objectname_addr
+
+   filename_addr = allocate_string(filename)
+   objectname_addr = allocate_string(objectname)
+   ret = c_func(my_load_datafile_object, {filename_addr, objectname_addr})
+   free(filename_addr)
+   free(objectname_addr)
+   return ret
+end function
+
+-----------------------------
+-- unload_datafile_object
+constant my_unload_datafile_object = link_proc(AllegroLib, "unload_datafile_object", {C_POINTER})
+global procedure unload_datafile_object(atom mydatafile)
+   c_proc(my_unload_datafile_object, {mydatafile})
+end procedure
+
+-----------------------------
+-- find_datafile_object
+constant my_find_datafile_object = link_func(AllegroLib, "find_datafile_object", {C_POINTER, C_POINTER}, C_POINTER)
+global function find_datafile_object(atom mydatafile, sequence objectname)
+   atom ret
+   atom objectname_addr
+
+   objectname_addr = allocate_string(objectname)
+   ret = c_func(my_find_datafile_object, {mydatafile, objectname_addr})
+   free(objectname_addr)
+   return ret
+end function
+
+-----------------------------
+-- get_datafile_property
+constant my_get_datafile_property = link_func(AllegroLib, "get_datafile_property", {C_POINTER, C_INT}, C_POINTER)
+global function get_datafile_property(atom mydatafile, integer mytype)
+   return peek_sequence( c_func(my_get_datafile_property,
+         {mydatafile, mytype}), 255)
+end function
+
+-----------------------------
+-- register_datafile_object
+-- TODO: void register_datafile_object(int id, void *(*load)(PACKFILE *f, long size), void (*destroy)(void *data));
+
+-----------------------------
+-- fixup_datafile
+constant my_fixup_datafile = link_proc(AllegroLib, "fixup_datafile", {C_POINTER})
+global procedure fixup_datafile(atom mydatafile)
+   c_proc(my_fixup_datafile, {mydatafile})
+end procedure
+
+-----------------------------
+-- get_datafile_dat
+global function get_datafile_dat( atom dat, integer obj )
+  return peek4u(dat+16*obj)
+end function
+
+-----------------------------
+-- get_datafile_type
+-- TODO: get datafile "type" variable
+
+-----------------------------
+-- get_datafile_size
+-- TODO: get datafile "size" variable
+
+
+
+--*************************************************
+-- Fixed point maths routines
+--*************************************************
+
+-----------------------------
+-- fixacos
+constant my_fixacos = link_func(AllegroLib, "fixacos", {C_INT}, C_INT)
+global function fixacos(atom x)
+   return c_func(my_fixacos,{x})
+end function
+
+-----------------------------
+-- fixadd
+constant my_fixadd = link_func(AllegroLib, "fixadd", {C_INT, C_INT}, C_INT)
+global function fixadd(integer x, integer y)
+   return c_func(my_fixadd,{x, y})
+end function
+
+-----------------------------
+-- fasin
+constant my_fixasin = link_func(AllegroLib, "fixasin", {C_INT}, C_INT)
+global function fixasin(atom x)
+   return c_func(my_fixasin,{x})
+end function
+
+-----------------------------
+-- fixatan
+constant my_fixatan = link_func(AllegroLib, "fixatan", {C_INT}, C_INT)
+global function fixatan(atom x)
+   return c_func(my_fixatan,{x})
+end function
+
+-----------------------------
+-- fixatan2
+constant my_fixatan2 = link_func(AllegroLib, "fixatan2", {C_INT, C_INT}, C_INT)
+global function fixatan2(atom x, atom y)
+   return c_func(my_fixatan2,{x, y})
+end function
+
+-----------------------------
+-- fixceil
+constant my_fixceil = link_func(AllegroLib, "fixceil", {C_DOUBLE}, C_INT)
+global function fixceil(atom x)
+   return c_func(my_fixceil,{x})
+end function
+
+-----------------------------
+-- fixcos
+constant my_fixcos = link_func(AllegroLib, "fixcos", {C_INT}, C_INT)
+global function fixcos(atom x)
+   return c_func(my_fixcos,{x})
+end function
+
+-----------------------------
+-- fixdiv
+constant my_fixdiv = link_func(AllegroLib, "fixdiv", {C_INT, C_INT}, C_INT)
+global function fixdiv(integer x, integer y)
+   return c_func(my_fixdiv,{x, y})
+end function
+
+-----------------------------
+-- fixfloor
+constant my_fixfloor = link_func(AllegroLib, "fixfloor", {C_DOUBLE}, C_INT)
+global function fixfloor(atom x)
+   return c_func(my_fixfloor,{x})
+end function
+
+-----------------------------
+-- fixhypot
+constant my_fixhypot = link_func(AllegroLib, "fixhypot", {C_INT, C_INT}, C_INT)
+global function fixhypot(atom x, atom y)
+   return c_func(my_fixhypot,{x, y})
+end function
+
+-----------------------------
+-- fixmul
+constant my_fixmul = link_func(AllegroLib, "fixmul", {C_INT, C_INT}, C_INT)
+global function fixmul(integer x, integer y)
+   return c_func(my_fixmul,{x, y})
+end function
+
+-----------------------------
+-- fixsin
+constant my_fixsin = link_func(AllegroLib, "fixsin", {C_INT}, C_INT)
+global function fixsin(atom x)
+   return c_func(my_fixsin,{x})
+end function
+
+-----------------------------
+-- fixsqrt
+constant my_fixsqrt = link_func(AllegroLib, "fixsqrt", {C_INT}, C_INT)
+global function fixsqrt(atom x)
+   return c_func(my_fixsqrt,{x})
+end function
+
+-----------------------------
+-- fsub
+constant my_fixsub = link_func(AllegroLib, "fixsub", {C_INT, C_INT}, C_INT)
+global function fixsub(integer x, integer y)
+   return c_func(my_fixsub,{x, y})
+end function
+
+-----------------------------
+-- fixtan
+constant my_fixtan = link_func(AllegroLib, "fixtan", {C_INT}, C_INT)
+global function fixtan(atom x)
+   return c_func(my_fixtan,{x})
+end function
+
+-----------------------------
+-- fixtof
+constant my_fixtof = link_func(AllegroLib, "fixtof", {C_INT}, C_DOUBLE)
+global function fixtof(integer x)
+   return c_func(my_fixtof,{x})
+end function
+
+-----------------------------
+-- fixtoi
+constant my_fixtoi = link_func(AllegroLib, "fixtoi", {C_INT}, C_INT)
+global function fixtoi(integer x)
+   return c_func(my_fixtoi,{x})
+end function
+
+-----------------------------
+-- fixtorad_r
+-- TODO: Fixed point math routines:
+-- TODO: extern const fixed fixtorad_r;
+
+-----------------------------
+-- ftofix
+constant my_ftofix = link_func(AllegroLib, "ftofix", {C_DOUBLE}, C_INT)
+global function ftofix(atom x)
+   return c_func(my_ftofix,{x})
+end function
+
+-----------------------------
+-- itofix
+constant my_itofix = link_func(AllegroLib, "itofix", {C_INT}, C_INT)
+global function itofix(integer x)
+   return c_func(my_itofix,{x})
+end function
+
+-----------------------------
+-- radtofix_r
+-- TODO: extern const fixed radtofix_r;
+
+
+--*************************************************
+-- 3D math routines
+--*************************************************
+-- TODO: All of the 3D math routines
+
+
+--*************************************************
+-- Quaternion math routines
+--*************************************************
+-- TODO: All of the Quaternion math routines
+
+
+--*************************************************
+-- GUI routines
+--*************************************************
+-- TODO: All of the GUI routines
+
+-----------------------------
+-- alert
+constant my_alert = link_func(AllegroLib, "alert", {C_POINTER, C_POINTER, C_POINTER, C_POINTER, C_POINTER, C_INT, C_INT}, C_INT)
+
+-- support routine for alert
+procedure alert_free(atom a)
+   if a != NULL then
+      free(a)
+   end if
+end procedure
+
+-- support routine for alert
+function alert_allocate_string(sequence s)
+   if length(s) > 0 then
+      return allocate_string(s)
+   else
+      return NULL
+   end if
+end function
+
+global function alert(sequence s1, sequence s2, sequence s3, sequence b1, sequence b2, integer c1, integer c2)
+
+   atom s1_addr, s2_addr, s3_addr, b1_addr, b2_addr
+   integer ret
+
+   s1_addr = alert_allocate_string(s1)
+   s2_addr = alert_allocate_string(s2)
+   s3_addr = alert_allocate_string(s3)
+   b1_addr = alert_allocate_string(b1)
+   b2_addr = alert_allocate_string(b2)
+   ret = c_func(my_alert, {s1_addr, s2_addr, s3_addr,
+            b1_addr, b2_addr, c1, c2})
+   alert_free(s1_addr)
+   alert_free(s2_addr)
+   alert_free(s3_addr)
+   alert_free(b1_addr)
+   alert_free(b2_addr)
+
+   return ret
+end function

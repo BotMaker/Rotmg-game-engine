@@ -1,0 +1,22 @@
+include euallegro.ew as allegro
+
+
+global constant texture_width = 1
+global constant texture_height = 2
+global constant texture_tex = 3
+
+global sequence texture_list
+integer tindex
+
+texture_list={}
+tindex=0
+
+
+global function texture_load(sequence fname)
+  object ret
+  
+  ret=load_bitmap(fname, the_palette)
+  texture_list=append(texture_list,{bitmap_w(ret),bitmap_h(ret),ret})
+  
+  return length(texture_list)
+end function

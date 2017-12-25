@@ -1,0 +1,42 @@
+include get.e
+include spritesheet.ew
+
+global sequence font_list
+font_list={}
+
+integer findex
+global integer currentfont
+findex=0
+currentfont=1
+
+
+function real(sequence string )
+sequence temp
+temp=value(string)
+return temp[2]
+end function
+
+
+global function font_load(sequence fname,sequence bname) 
+  integer fn,width,height,spr
+  sequence font_widths
+
+  font_widths=repeat(0,95)
+
+  fn=open(fname,"r")
+  width=real(gets(fn))
+  height=real(gets(fn))
+  for i=1 to 95 do
+    font_widths[i]=real(gets(fn))
+  end for
+  close(fn)
+  
+
+  spr=spritesheet_new(texture_load(bname),width,height)
+
+  font_list=append(font_list,{spr,width,height,font_widths})
+
+  findex+=1
+  return findex
+end function
+

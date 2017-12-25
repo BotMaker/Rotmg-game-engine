@@ -1,0 +1,73 @@
+include eugl.ew
+include winbmp.ew
+
+global constant texNum = 80
+global constant texID 	= allocate(4*texNum)
+
+integer width,height
+
+global constant texture_width = 1
+global constant texture_height = 2
+
+
+procedure makeTextureImage(sequence filename, integer tex_name)
+        sequence image,col
+        atom image2,pos,pos2
+	
+        image = load_bmp(filename)
+	
+	gl_bindTexture(GL_TEXTURE_2D, peek4u(texID+tex_name*4))
+
+        image2=allocate((image[3]*image[4])*4) --rgba
+        mem_set(image2, 0, (image[3]*image[4])*4)
+
+        pos=0
+        pos2=0
+        for x=1 to image[3] do
+          for y=1 to image[4] do
+            col=peek({image[2]+pos2,3})
+            for j=1 to 3 do
+             poke(image2+pos, peek(image[2]+pos2))
+             pos+=1
+             pos2+=1
+            end for
+            if equal(col,{255,0,255}) then
+             poke(image2+pos, 0)
+            else
+              poke(image2+pos, 255)
+            end if
+            pos+=1
+
+          end for
+        end for
+
+	gl_texImage2D(GL_TEXTURE_2D, 0, 4, image[3], image[4], 0, GL_RGBA, GL_UNSIGNED_BYTE, image2)
+
+        free(image2)
+
+        gl_texParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+	gl_texParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+	
+	gl_bindTexture(GL_TEXTURE_2D, 0)
+
+        width=image[3]
+        height=image[4]
+
+	free(image[2])
+end procedure
+
+
+global sequence texture_list
+integer tindex
+
+texture_list={}
+tindex=0
+
+
+global function texture_load(sequence fname)
+  makeTextureImage(fname,tindex)
+  tindex+=1
+  texture_list=append(texture_list,{width,height})
+  
+  return tindex
+end function

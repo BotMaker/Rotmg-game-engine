@@ -1,0 +1,175 @@
+------------------------------------------------------------------------------------
+--  Picture Menu Item v1.0  <eunexus@yahoo.com>
+--
+--  This software is free and may be used in any program or project,
+--  compiled or not, for any purpose as long as I am given due credit.
+------------------------------------------------------------------------------------
+--  If there are any comments, questions, concerns, (bugs *gasp*) please email me.
+------------------------------------------------------------------------------------
+
+without warning
+sequence	PicHandles		PicHandles		= {}
+atom		MenuMaskColor	MenuMaskColor	= 0
+
+constant
+pmExtTextOut			= registerw32Procedure( gdi32, "ExtTextOutA", {C_LONG,C_INT,C_INT,C_UINT,C_POINTER,C_POINTER,C_UINT,C_INT} ),
+pmDrawEdge				= registerw32Procedure( user32, "DrawEdge", {C_LONG,C_POINTER,C_UINT,C_UINT} ),
+pmDrawState				= registerw32Procedure( user32, "DrawStateA", {C_LONG,C_LONG,C_POINTER,C_LONG,C_LONG,C_INT,C_INT,C_INT,C_INT,C_UINT} ),
+pmImageList_AddMasked	= registerw32Function( comctl32, "ImageList_AddMasked", {C_LONG,C_LONG,C_LONG}, C_LONG ),
+pmImageList_AddIcon		= registerw32Function( comctl32, "ImageList_AddIcon", {C_LONG,C_LONG}, C_LONG ),
+pmImageList_Draw		= registerw32Procedure( comctl32, "ImageList_Draw", {C_LONG,C_INT,C_LONG,C_INT,C_INT,C_UINT} ),
+pmImageList_SetBkColor	= registerw32Procedure( comctl32, "ImageList_SetBkColor", {C_LONG,C_LONG} )
+
+-- create an image list for blits
+constant
+pmImageList = w32Func( ImageList_Create, {17,17,33,0,1} )
+w32Proc( pmImageList_SetBkColor, {pmImageList,#FFFFFFFF} )
+
+-- procedure: setMenuMaskColor [sets the mask color for drawing] -------------------
+global procedure setMenuMaskColor( atom newColor )
+	MenuMaskColor = newColor
+end procedure
+
+-- procedure: DrawMenuItem [draws a new picture menu item] -------------------------
+procedure DrawMenuItem( integer self, integer event, sequence params )
+	atom CntlID
+	atom Text
+	atom Void
+	atom OldTxColor
+	atom OldBkColor
+	atom memRect
+	atom EdgeType
+	atom Image
+	atom cDC
+	atom hOldBM
+	atom mDC
+	sequence Extent
+	sequence Rect
+	sequence OldText
+	sequence First
+	sequence Second
+
+	if params[1] = 44 then -- WM_MEASUREITEM
+		if peek4u(params[3]) = 1 then -- ODT_MENU
+			CntlID = peek4u( params[3] + 8 )
+			Extent = getTextExtent( CntlID, getText(CntlID) )
+			poke4( params[3]+12, {Extent[1]+35,19} )
+			returnValue( 1 )
+		end if
+	elsif params[1] = 43 then -- WM_DRAWITEM
+		if peek4u(params[3]) = 1 then -- ODT_MENU
+			CntlID = peek4u( params[3] + 8 )
+			OldText = getText( CntlID )
+			if match("\t",OldText) then
+				First = OldText[1..match("\t",OldText)-1]
+				Second = OldText[match("\t",OldText)+1..length(OldText)]
+			else
+				First = OldText
+				Second = {}
+			end if
+			mDC = peek4u( params[3] + 24 )
+			-- set correct colors
+			if and_bits(peek4u(params[3]+16),1) = 0 then
+				OldBkColor = w32Func( xSetBkColor, {mDC,getSysColor(COLOR_MENU)} )
+				OldTxColor = w32Func( xSetTextColor, {mDC,getSysColor(COLOR_MENUTEXT)} )
+				EdgeType = 2
+			else
+				OldBkColor = w32Func( xSetBkColor, {mDC,getSysColor(COLOR_HIGHLIGHT)} )
+				OldTxColor = w32Func( xSetTextColor, {mDC,getSysColor(COLOR_HIGHLIGHTTEXT)} )
+				EdgeType = 1
+			end if
+			if and_bits(peek4u(params[3]+16),2) != 0 then
+				OldTxColor = w32Func( xSetTextColor, {mDC,getSysColor(COLOR_GRAYTEXT)} )
+			end if
+			-- draw border (or not)
+			Rect = peek4u( {params[3]+28,4} )
+			Rect[3] = 19
+			memRect = allocate( 16 )
+			poke4( memRect, Rect )
+			w32Proc( pmDrawEdge, {mDC,memRect,EdgeType,12} )
+			free( memRect )
+			-- draw image
+			Image = PicHandles[ CntlID ]
+			if Image != -1 then
+				w32Proc( pmImageList_Draw, {pmImageList,Image,mDC,peek4u(params[3]+28)+1,peek4u(params[3]+32)+1,and_bits(peek4u(params[3]+16),2)*4} )
+				poke4( params[3]+28, 20 )
+			end if
+			-- draw text
+			w32Proc( pmExtTextOut, {mDC,22,peek4u(params[3]+32)+2,2,params[3]+28,0,0,0} )
+			poke4( params[3]+28, 20 )
+			poke4( params[3]+28, peek4u(params[3]+28)+2 )
+			poke4( params[3]+32, peek4u(params[3]+32)+2 )
+			Text = allocate_string( First )
+			Void = w32Func( xDrawTextEx, {mDC,Text,length(First),params[3]+28,0,0} )
+			free( Text )
+			if length(Second) != 0 then
+				poke4( params[3]+36, peek4u(params[3]+36)-18 )
+				Text = allocate_string( Second )
+				Void = w32Func( xDrawTextEx, {mDC,Text,length(Second),params[3]+28,DT_RIGHT	,0} )
+				free( Text )
+			end if
+			Void = w32Func( xSetBkColor, {mDC,OldBkColor} )
+			Void = w32Func( xSetTextColor, {mDC,OldTxColor} )
+			returnValue( 1 )
+		end if
+	end if
+end procedure
+
+-- function: picmenu [creates a new picture menu item] -----------------------------
+function addmenuitem( atom Type, sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, atom style, object exStyle )
+	atom newCntlID
+	atom Parent
+	atom Image
+	atom Void
+	atom Pos
+
+	newCntlID = create( Type, Text, ParentID, 0, 0, 0, 0, 0 )
+	PicHandles = resizeSeq( PicHandles, newCntlID, -1 )
+
+	Parent = getHandle( findParent(newCntlID) )
+	Pos = w32Func( xGetMenuItemCount, {Parent} ) - 1
+
+	Void = w32Func( xModifyMenu, {Parent,Pos,or_all({MF_OWNERDRAW,MF_BYPOSITION}),newCntlID,newCntlID} )
+
+	if atom(exStyle) then
+		Image = exStyle
+	else
+		if match(".bmp",exStyle) > 0 then
+			Image = loadBitmapFromFile( exStyle )
+			PicHandles[newCntlID] = w32Func( pmImageList_AddMasked, {pmImageList,Image,MenuMaskColor} )
+		elsif match(".ico",exStyle) > 0 then
+			Image = loadIconFromFile( exStyle )
+			PicHandles[newCntlID] = w32Func( pmImageList_AddIcon, {pmImageList,Image} )
+		end if
+	end if
+
+	setHandler( findParentWindow(newCntlID), w32HEvent, routine_id("DrawMenuItem") )
+	Void = w32Func( xDrawMenuBar, {Parent} )
+	return newCntlID
+end function
+
+-- function: picmenu [creates a new picture menu item] -----------------------------
+global function picmenu( sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, atom style, object exStyle )
+	return( create(Menu,Text,ParentID,0,0,0,0,0) )
+--	return( addmenuitem(Menu,Text,ParentID,x,y,cx,cy,style,exStyle) )
+end function
+
+-- function: picmenuitem [creates a new picture menu item] -------------------------
+global function picmenuitem( sequence Text, atom ParentID, integer x, integer y, integer cx, integer cy, atom style, object exStyle )
+	return( addmenuitem(MenuItem,Text,ParentID,x,y,cx,cy,style,exStyle) )
+end function
+
+-- register the new control
+global constant PicMenu = requestUniqueID()
+registerXcontrol( PicMenu, routine_id("picmenu") )
+global constant PicMenuItem = requestUniqueID()
+registerXcontrol( PicMenuItem, routine_id("picmenuitem") )
+
+------------------------------------------------------------------------------------
+--  Version info:
+--
+--  1.0: initial release
+--
+------------------------------------------------------------------------------------
+
+-- ACS_TRANSPARENT

@@ -1,0 +1,673 @@
+-- reg.ew - Registry wrappers for Euphoria - version 1.2
+-- Copyright (C) 2002  Davi Tassinari de Figueiredo
+--
+-- If you wish to contact me, send an e-mail to davitf@eml.cc .
+--
+-- You can get the latest version of this program from my Euphoria page:
+-- http://www16.brinkster.com/davitf/
+--
+--
+-- BKB indicates code added by Brian K. Broker for reading REG_EXPAND_SZ
+-- data.
+--
+--
+-- License terms and disclaimer:
+--
+-- Permission is granted to anyone to use this software for any purpose,
+-- including commercial applications, and to alter it and redistribute it
+-- freely, subject to the following restrictions:
+--
+-- 1. The origin of this software must not be misrepresented; you must not
+--    claim that you wrote the original software or remove the original
+--    authors' names.
+-- 2. Altered source versions must be plainly marked as such, and must not
+--    be misrepresented as being the original software.
+-- 3. All source distributions, with or without modifications, must be
+--    distributed under this license. You may also opt to distribute the
+--    software under the GNU General Public License, version 2 or (at your
+--    option) any later version, in which case you should replace this
+--    notice with an appropriate one. If this software's source code is
+--    distributed as part of a larger product, this item does not apply to
+--    the rest of the product.
+-- 4. If you use this software in a product, an acknowledgment in the
+--    product documentation is required. If the source code for the product
+--    is not freely distributed, you must include information on how to
+--    freely obtain the original software's source code.
+--
+-- This software is provided 'as-is', without any express or implied
+-- warranty.  In no event will the authors be held liable for any damages
+-- arising from the use of this software.
+--
+-- If you want to distribute this software in a way not allowed by this
+-- license, or distribute the source under different license terms, contact
+-- the authors for permission.
+
+
+
+include dll.e
+include machine.e
+
+constant 
+       REG_SZ = 1,
+       REG_EXPAND_SZ = 2, --BKB: added this type
+	 REG_BINARY = 3, -- I don't know if it is the right name
+	 REG_DWORD = 4
+
+constant HKEY_CLASSES_ROOT = #80000000,
+	 HKEY_CURRENT_USER = #80000001,
+	 HKEY_LOCAL_MACHINE = #80000002,
+	 HKEY_USERS = #80000003,
+	 HKEY_CURRENT_CONFIG = #80000005,
+	 HKEY_DYN_DATA = #80000006
+
+
+global constant ERROR_NONE = 0,
+	 ERROR_BADDB = 1,
+	 ERROR_BADKEY = 2,
+	 ERROR_CANTOPEN = 3,
+	 ERROR_CANTREAD = 4,
+	 ERROR_CANTWRITE = 5,
+	 ERROR_OUTOFMEMORY = 6,
+	 ERROR_ARENA_TRASHED = 7,
+	 ERROR_ACCESS_DENIED = 8,
+	 ERROR_INVALID_PARAMETERS = 87,
+	 ERROR_MORE_DATA = 234,
+	 ERROR_NO_MORE_ITEMS = 259
+
+constant KEY_ALL_ACCESS = #F003F    -- Corrected in version 1.2 (was #3F)
+
+global constant REG_OPTION_NON_VOLATILE = 0
+
+constant 
+  advapi32=open_dll("advapi32.dll"),
+  kernel32=open_dll("kernel32.dll")  --BKB: for ExpandEnvironmentStrings
+
+constant 
+       ExpandEnvironmentStrings=define_c_func(kernel32,"ExpandEnvironmentStringsA",
+        {C_POINTER,C_POINTER,C_UINT},C_UINT),  --BKB: added for type REG_EXPAND_SZ
+       RegCloseKey=define_c_func(advapi32,"RegCloseKey",{C_LONG},C_LONG),
+	 RegOpenKeyExA=define_c_func(advapi32,"RegOpenKeyExA",
+	  {C_LONG,C_POINTER,C_LONG,C_LONG,C_LONG},C_LONG),
+	 RegQueryValueExA=define_c_func(advapi32,"RegQueryValueExA",
+	  {C_LONG,C_POINTER,C_LONG,C_LONG,C_POINTER,C_LONG},C_LONG),
+	 RegCreateKeyA=define_c_func(advapi32,"RegCreateKeyA",
+	  {C_LONG,C_POINTER,C_LONG},C_LONG),
+	 RegDeleteKeyA=define_c_func(advapi32,"RegDeleteKeyA",
+	  {C_LONG,C_POINTER},C_LONG),
+	 RegSetValueExA=define_c_func(advapi32,"RegSetValueExA",
+	  {C_LONG,C_POINTER,C_LONG,C_LONG,C_LONG,C_LONG},C_LONG),
+	 RegDeleteValueA=define_c_func(advapi32,"RegDeleteValueA",
+	  {C_LONG,C_POINTER},C_LONG),
+	 RegEnumKeyExA=define_c_func(advapi32,"RegEnumKeyExA",
+	  {C_LONG,C_LONG,C_POINTER,C_POINTER,C_LONG,C_POINTER,C_POINTER,C_POINTER},C_LONG),
+	 RegEnumValueA=define_c_func(advapi32,"RegEnumValueA",
+	  {C_LONG,C_LONG,C_POINTER,C_POINTER,C_LONG,C_POINTER,C_POINTER,C_POINTER},C_LONG)
+
+
+
+function is_binary(sequence lpData)
+    -- Tests a string: does it need to be stored as binary instead of as string?
+
+    for temp=1 to length(lpData) do
+	if lpData[temp]<32 then
+	    return 1
+	end if
+    end for
+
+    return 0
+end function
+
+
+--BKB: borrowed from clib.e by Chris Bensler
+------------------------------------------------
+function peek_string(atom x)
+------------------------------------------------
+-- syntax: s = peek_string( x )
+-- description:
+--    retrieves a null-terminated string from address x.
+--    if x is a sequence, it is assumed to be an array of addresses,
+--       an array of strings will be returned respectively
+ atom offset
+
+   offset = x
+   while peek(offset) do offset +=1 end while
+   return peek({x,offset-x})
+end function
+
+
+atom reg_error
+
+function parse_key(sequence Key)
+    -- Divides Key into the key handle and the subkey name
+    atom hKey,divisor
+    sequence lpSubKey,hKeyName
+    reg_error=0
+
+    lpSubKey=""
+    divisor=find('\\',Key)
+
+    if divisor then
+	hKeyName=Key[1..divisor-1]
+	lpSubKey=Key[divisor+1..length(Key)]
+
+    else
+	hKeyName = Key
+	lpSubKey = {}
+    end if
+
+
+    if compare(hKeyName,"HKEY_CLASSES_ROOT")=0 then
+	hKey=HKEY_CLASSES_ROOT
+    elsif compare(hKeyName,"HKEY_CURRENT_USER")=0 then
+	hKey=HKEY_CURRENT_USER
+    elsif compare(hKeyName,"HKEY_LOCAL_MACHINE")=0 then
+	hKey=HKEY_LOCAL_MACHINE
+    elsif compare(hKeyName,"HKEY_USERS")=0 then
+	hKey=HKEY_USERS
+    elsif compare(hKeyName,"HKEY_CURRENT_CONFIG")=0 then
+	hKey=HKEY_CURRENT_CONFIG
+    elsif compare(hKeyName,"HKEY_DYN_DATA")=0 then
+	hKey=HKEY_DYN_DATA
+    else
+	reg_error=ERROR_INVALID_PARAMETERS
+	return {}
+    end if
+
+
+    return {hKey,lpSubKey}
+
+end function
+
+function openKey(sequence Key)
+    -- Opens a Registry key and returns a handle to it
+
+    atom hKey,lpSubKeyAddress,phkResultAddress,phkResult
+    sequence lpSubKey,parsed
+
+    -- Divide key
+    parsed=parse_key(Key)
+    if reg_error then return reg_error end if
+    hKey=parsed[1]    lpSubKey=parsed[2]
+
+    -- Allocate memory and store parameters
+    lpSubKeyAddress=allocate_string(lpSubKey)
+    phkResultAddress=allocate(4)
+
+    -- Call DLL function
+    reg_error=c_func(RegOpenKeyExA,{hKey,lpSubKeyAddress,0,
+	KEY_ALL_ACCESS,phkResultAddress})
+
+    -- Read handle from memory
+    phkResult=peek4u(phkResultAddress)
+
+    -- Free allocated memory
+    free(lpSubKeyAddress)
+    free(phkResultAddress)
+
+    return phkResult
+end function
+
+
+procedure closeKey(atom hKey)
+    -- Closes the Registry key opened with openKey
+
+    -- Call DLL function
+    reg_error=c_func(RegCloseKey,{hKey})
+
+end procedure
+
+function query_type(atom hKey,sequence lpValueName)
+    -- Returns the type and length of the value in Registry
+
+    atom lpValueNameAddress,lpType,lpTypeAddress,lpcbData,lpcbDataAddress
+
+    -- Allocate memory and store parameters
+    lpValueNameAddress=allocate_string(lpValueName)
+    lpTypeAddress=allocate(4)
+    lpcbDataAddress=allocate(4)
+
+    -- Call DLL function
+    reg_error=c_func(RegQueryValueExA,{hKey,lpValueNameAddress,0,
+	lpTypeAddress,0,lpcbDataAddress})
+
+    -- Read information from memory
+    lpType=peek4u(lpTypeAddress)
+    lpcbData=peek4u(lpcbDataAddress)
+
+    -- Free allocated memory
+    free(lpValueNameAddress)
+    free(lpTypeAddress)
+    free(lpcbDataAddress)
+
+    return {lpType,lpcbData}
+end function
+
+--BKB: wrapper for ExpandEnvironmentStrings
+function expand_env_strings( sequence Src )
+  atom lpSrc, lpDst
+  integer nSize, ret
+  
+  lpSrc = allocate_string( Src )
+  nSize = length(Src)+1
+  lpDst = allocate( nSize )
+  
+  ret = c_func( ExpandEnvironmentStrings,{lpSrc,lpDst,nSize} )
+  if ret > nSize then
+    free(lpDst)
+    lpDst = allocate( ret )
+    ret = c_func( ExpandEnvironmentStrings,{lpSrc,lpDst,ret} )
+  end if
+  Src = peek_string(lpDst)
+  
+  free(lpSrc)
+  free(lpDst)
+
+  return Src  
+end function
+
+function query_string(atom hKey,sequence lpValueName,atom lpType,atom lpcbData)
+    -- Reads a string from Registry
+
+    atom lpValueNameAddress,lpDataAddress,lpTypeAddress,lpcbDataAddress
+    sequence lpData
+
+    -- Allocate memory and store parameters
+    lpValueNameAddress=allocate_string(lpValueName)
+    lpDataAddress=allocate(lpcbData)
+    lpTypeAddress=allocate(4)
+    lpcbDataAddress=allocate(4)
+
+    poke4(lpTypeAddress,lpType)
+    poke4(lpcbDataAddress,lpcbData)
+
+    -- Call DLL function
+    reg_error=c_func(RegQueryValueExA,{hKey,lpValueNameAddress,0,
+	lpTypeAddress,lpDataAddress,lpcbDataAddress})
+
+    -- Read information from memory
+    lpData=peek({lpDataAddress,lpcbData})
+
+    -- Free allocated memory
+    free(lpValueNameAddress)
+    free(lpTypeAddress)
+    free(lpcbDataAddress)
+    free(lpDataAddress)
+
+    -- Return string
+    if lpType=REG_SZ then   -- zero-terminated string, remove 0 at the end
+	    return lpData[1..length(lpData)-1]
+	  elsif lpType=REG_EXPAND_SZ then --BKB: expand environment variables
+      return expand_env_strings( lpData )
+    else                    -- binary data, do not remove last char
+	return lpData
+    end if
+
+end function
+
+
+function query_long(atom hKey,sequence lpValueName,atom lpcbData)
+    -- Reads an atom (double word) from Registry
+
+    atom lpValueNameAddress,lpDataAddress,lpTypeAddress,lpcbDataAddress
+    atom lpData
+
+    -- Allocate memory and store parameters
+    lpValueNameAddress=allocate_string(lpValueName)
+    lpDataAddress=allocate(lpcbData)
+    lpTypeAddress=allocate(4)
+    lpcbDataAddress=allocate(4)
+
+    poke4(lpTypeAddress,REG_DWORD)
+    poke4(lpcbDataAddress,lpcbData)
+
+
+    -- Call DLL function
+    reg_error=c_func(RegQueryValueExA,{hKey,lpValueNameAddress,0,
+	lpTypeAddress,lpDataAddress,lpcbDataAddress})
+
+    -- Read information from memory
+    lpData=peek4u(lpDataAddress)
+
+    -- Free allocated memory
+    free(lpValueNameAddress)
+    free(lpTypeAddress)
+    free(lpcbDataAddress)
+    free(lpDataAddress)
+
+    return lpData
+end function
+
+
+
+global function regQueryValue(sequence Key,sequence ValueName,object Default)
+    -- Reads a value from Registry
+
+    atom key_id
+    sequence info
+    object data
+
+    -- Open the Registry key
+    key_id=openKey(Key)
+
+    if reg_error then  return Default  end if   -- Key not found, return default
+
+    -- Get value type (string/dword) and length
+    info=query_type(key_id,ValueName)
+
+    if reg_error then  closeKey(key_id) return Default  end if   -- Value not found, return default
+
+    -- Read value  --BKB: added support for REG_EXPAND_SZ
+    if info[1]=REG_SZ or info[1]=REG_EXPAND_SZ or info[1]=REG_BINARY then    -- String
+	data=query_string(key_id,ValueName,info[1],info[2])
+    elsif info[1]=REG_DWORD then                    -- Dword
+	data=query_long(key_id,ValueName,info[2])
+    else                                            -- Unknown type
+	reg_error=ERROR_BADKEY   -- Error
+    end if
+
+    if reg_error then  closeKey(key_id) return Default  end if   -- Value not found, return default
+
+    -- Close the Registry key
+    closeKey(key_id)
+
+    return data
+end function
+
+
+global function regCreateKey(sequence Key)
+    -- Creates a new key in Registry
+
+    atom lpSubKeyAddress,phkResultAddress,phkResult,hKey
+    sequence parsed,lpSubKey
+
+    -- Divide key
+    parsed=parse_key(Key)
+    if reg_error then return reg_error end if
+    hKey=parsed[1]    lpSubKey=parsed[2]
+
+    -- Allocate memory and store parameters
+    lpSubKeyAddress=allocate_string(lpSubKey)
+    phkResultAddress=allocate(4)
+
+    -- Call DLL function
+    reg_error=c_func(RegCreateKeyA,{hKey,lpSubKeyAddress,phkResultAddress})
+
+    -- Read key handle from memory
+    phkResult=peek4u(phkResultAddress)
+
+    -- Free allocated memory
+    free(lpSubKeyAddress)
+    free(phkResultAddress)
+
+    if reg_error then return reg_error end if   -- Error while creating key?
+
+    -- Close created key
+    closeKey(phkResult)
+
+    return ERROR_NONE
+end function
+
+
+global function regDeleteKey(sequence Key)
+    -- Deletes a key from Registry
+
+    atom lpSubKeyAddress,hKey
+    sequence parsed,lpSubKey
+
+    -- Divide key
+    parsed=parse_key(Key)
+    if reg_error then return reg_error end if
+    hKey=parsed[1]    lpSubKey=parsed[2]
+
+
+
+    -- Allocate memory and store parameters
+    lpSubKeyAddress=allocate_string(lpSubKey)
+
+    -- Call DLL function
+    reg_error=c_func(RegDeleteKeyA,{hKey,lpSubKeyAddress})
+
+    -- Free allocated memory
+    free(lpSubKeyAddress)
+
+    return reg_error
+end function
+
+
+function set_string(atom hKey,sequence lpValueName,sequence lpData)
+    -- Writes a string to Registry
+
+    atom lpValueNameAddress,lpDataAddress
+
+    -- Allocate memory and store parameters
+    lpValueNameAddress=allocate_string(lpValueName)
+    lpDataAddress=allocate_string(lpData)
+
+    -- Call DLL function
+    if is_binary(lpData) then   -- Is data binary?
+	reg_error=c_func(RegSetValueExA,{hKey,lpValueNameAddress,0,
+	 REG_BINARY,lpDataAddress,length(lpData)})      -- Yes
+    else
+	reg_error=c_func(RegSetValueExA,{hKey,lpValueNameAddress,0,
+	 REG_SZ,lpDataAddress,length(lpData)+1})        -- No
+    end if
+
+    -- Free allocated memory
+    free(lpValueNameAddress)
+    free(lpDataAddress)
+
+    return reg_error
+end function
+
+
+function set_long(atom hKey,sequence lpValueName,atom lpData)
+    -- Writes an atom (double word) to Registry
+
+    atom lpValueNameAddress,lpDataAddress
+
+    -- Allocate memory and store parameters
+    lpValueNameAddress=allocate_string(lpValueName)
+    lpDataAddress=allocate(4)
+
+    poke4(lpDataAddress,lpData)
+
+    -- Call DLL function
+    reg_error=c_func(RegSetValueExA,{hKey,lpValueNameAddress,0,
+	REG_DWORD,lpDataAddress,4})
+
+    -- Free allocated memory
+    free(lpValueNameAddress)
+    free(lpDataAddress)
+
+    return reg_error
+end function
+
+
+global function regSetValue(sequence Key,sequence ValueName,object Data)
+    -- Writes a value to Registry
+
+    atom key_id,reg_error_code
+
+    -- Open the Registry key
+    key_id=openKey(Key)
+
+
+    if reg_error=ERROR_BADKEY then      -- Key does not exist, create it
+
+	reg_error_code=regCreateKey(Key)            -- Create key
+	if reg_error_code then return reg_error_code end if -- Error while creating?
+	key_id=openKey(Key)                         -- Open key
+	if reg_error then return reg_error end if   -- Error while opening?
+
+    elsif reg_error!=ERROR_NONE then                -- Other error
+	return reg_error                            -- Return error
+    end if
+
+    -- Write value to Registry
+    -- Test value type
+    if sequence(Data) then    -- String
+	reg_error_code=set_string(key_id,ValueName,Data)
+    else                        -- Dword (atom)
+	reg_error_code=set_long(key_id,ValueName,Data)
+    end if
+
+    -- Close the Registry key
+    closeKey(key_id)
+
+    return reg_error_code
+end function
+
+
+global function regDeleteValue(sequence Key,sequence ValueName)
+    -- Deletes a value from Registry
+
+    atom key_id,reg_error_code,lpValueNameAddress
+
+    -- open the Registry key
+    key_id=openKey(Key)
+
+    if reg_error then return reg_error end if   -- Error while opening key?
+
+    -- Allocate memory and store parameters
+    lpValueNameAddress=allocate_string(ValueName)
+
+    -- Call DLL function
+    reg_error_code=c_func(RegDeleteValueA,{key_id,lpValueNameAddress})
+
+    -- Free allocated memory
+    free(lpValueNameAddress)
+
+    -- Close the Registry key
+    closeKey(key_id)
+
+    return reg_error_code
+end function
+
+global function regKeyExists (sequence key)
+    atom key_id
+    key_id=openKey(key)
+
+    if reg_error then return 0 end if   -- Key does not exist
+    closeKey (key_id)
+
+    return 1
+end function
+
+constant buffer_size = 256
+
+
+function readString (atom address, atom max)
+    atom pos
+    sequence data
+    data = peek ({address, max})
+
+    pos = find (0, data)
+    if pos = 0 then
+	return data
+    end if
+
+    return data [1..pos-1]
+end function
+
+
+global function regGetSubkeys (sequence key)
+    -- Gets a list of subkeys from Registry
+
+    atom key_id, iSubkey, lpszName, lpcchName, lpftLastWrite, reg_error_code
+    sequence subkeys
+
+    -- open the Registry key
+    key_id=openKey(key)
+
+    if reg_error then return reg_error end if   -- Key does not exist
+
+    -- Allocate memory for parameters
+    lpszName = allocate (buffer_size)   -- Subkey name
+    lpcchName = allocate (4)            -- Subkey size
+
+    lpftLastWrite = allocate (4)
+
+    subkeys = {}
+
+    iSubkey = 0
+
+
+    -- Read each subkey
+    while 1 do
+
+	poke4 (lpcchName, buffer_size)  -- Write buffer size
+	reg_error_code = c_func ( RegEnumKeyExA,    -- Call routine
+	{key_id, iSubkey, lpszName, lpcchName, 0, 0, 0, lpftLastWrite } )
+
+	if reg_error_code != 0 then exit end if     -- Check for errors
+
+	-- Read name
+	subkeys = append (subkeys, readString (lpszName, buffer_size))
+
+	-- Move to next item
+	iSubkey = iSubkey + 1
+
+    end while
+
+    -- close the Registry key
+    closeKey (key_id)
+
+
+    if reg_error_code != ERROR_NO_MORE_ITEMS then       -- no errors?
+	return reg_error_code
+    end if
+
+    return subkeys      -- return the names
+
+end function
+
+
+
+global function regGetValues (sequence key)
+    -- Gets a list of subkeys from Registry
+
+    atom key_id, iValue, lpszValue, lpcchValue, reg_error_code
+    sequence values
+
+    -- open the Registry key
+    key_id=openKey(key)
+
+    if reg_error then return reg_error end if   -- Key does not exist
+
+    -- Allocate memory for parameters
+    lpszValue = allocate (buffer_size)   -- Subkey name
+    lpcchValue = allocate (4)            -- Subkey size
+
+    values = {}
+
+    iValue = 0
+
+
+    -- Read each value
+    while 1 do
+
+	poke4 (lpcchValue, buffer_size)  -- Write buffer size
+	reg_error_code = c_func ( RegEnumValueA,    -- Call routine
+	{key_id, iValue, lpszValue, lpcchValue, 0, 0, 0, 0 } )
+
+	if reg_error_code != 0 then exit end if     -- Check for errors
+
+	-- Read name
+	values = append (values, readString (lpszValue, buffer_size))
+
+	-- Move to next item
+	iValue = iValue + 1
+
+    end while
+
+    -- close the Registry key
+    closeKey (key_id)
+
+
+    if reg_error_code != ERROR_NO_MORE_ITEMS then       -- no errors?
+	return reg_error_code
+    end if
+
+    return values      -- return the names
+
+end function
